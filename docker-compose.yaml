@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  kohaku-backend:
+    build: backend/
+    restart: unless-stopped
+
+  kohaku-discord:
+    build: discord/
+    restart: unless-stopped
+    depends_on:
+      - kohaku-backend
