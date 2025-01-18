@@ -3,10 +3,13 @@ use std::env;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
+mod core;
 mod db;
 mod handlers;
 mod models;
 mod scrapers;
+
+use core::scheduler::Scheduler;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -25,7 +28,12 @@ async fn main() -> std::io::Result<()> {
     info!("Starting server ...");
 
     // Scheduler
-    //TODO: Implement
+    if let Ok(scheduler) = Scheduler::new().await {
+        let _ = scheduler.start().await;
+        // Add scheduled task here
+        scrapers::init_scrapers(scheduler).await;
+        // -----
+    }
 
     // Start actix server
     let server_addr: String = env::var("SERVER_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string());

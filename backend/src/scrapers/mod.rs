@@ -1,27 +1,14 @@
 use reqwest::{Client, Error, Response};
+use tracing::info;
 
-/// Struct to store information about the scraper
-///
-/// ### Fields
-///  - `name` - Name of the game the data is scraped from (For logging purposes)
-///  - `cron` - Cron like string to determine WHEN the scraper should run (tokio-cron-scheduler)
-///  - `func` - Async function that get's executed when `Scraper.run()` is called
-pub struct Scraper<F>
-where
-    F: std::future::Future,
-{
-    name: String,
-    cron: String, // * * * * * * | sec min hour day-of-month month day-of-week
-    func: fn() -> F,
-}
+use crate::core::scheduler::{Scheduler, Task};
 
-impl<F> Scraper<F>
-where
-    F: std::future::Future,
-{
-    async fn run(self) {
-        (self.func)().await;
-    }
+pub async fn init_scrapers(scheduler : Scheduler) {
+    info!("[Scraper] - Setting up scrapers...");
+    // Add scrapers to scheduler
+    // Example: 
+    //scheduler.add_task(Task::new("scraper1", "* * * * * *", example, false)).await;
+    info!("[Scraper] - Done");
 }
 
 /// Requests a page for a scraper
