@@ -3,10 +3,10 @@ use tracing::info;
 
 use crate::core::scheduler::{Scheduler, Task};
 
-pub async fn init_scrapers(scheduler : Scheduler) {
+pub async fn init_scrapers(scheduler: Scheduler) {
     info!("[Scraper] - Setting up scrapers...");
     // Add scrapers to scheduler
-    // Example: 
+    // Example:
     //scheduler.add_task(Task::new("scraper1", "* * * * * *", example, false)).await;
     info!("[Scraper] - Done");
 }

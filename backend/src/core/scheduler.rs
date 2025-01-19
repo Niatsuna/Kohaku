@@ -26,11 +26,16 @@ impl<F> Task<F>
 where
     F: Future,
 {
-  pub fn new(name : &str, cron : &str, func : fn() -> F, once: bool) -> Self {
-    let name = String::from(name);
-    let cron = String::from(cron);
-    Task{name, cron, func, once}
-  } 
+    pub fn new(name: &str, cron: &str, func: fn() -> F, once: bool) -> Self {
+        let name = String::from(name);
+        let cron = String::from(cron);
+        Task {
+            name,
+            cron,
+            func,
+            once,
+        }
+    }
 }
 
 /// Scheduler for Tasks.
