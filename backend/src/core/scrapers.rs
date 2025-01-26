@@ -1,7 +1,9 @@
+/// Core functionalities for all scrapers.
+/// This includes for example requesting pages / jsons and checking if a scrape is necessary (TODO)
 use reqwest::{Client, Error, Response};
 use tracing::info;
 
-use crate::core::scheduler::{Scheduler, Task};
+use super::scheduler::{Scheduler, Task};
 
 pub async fn init_scrapers(scheduler: Scheduler) {
     info!("[Scraper] - Setting up scrapers...");

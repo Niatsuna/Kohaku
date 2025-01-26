@@ -1,3 +1,6 @@
+/// Core functionality of scheduling specific tasks with a cron-like structure.
+/// For example:
+/// With this scrapers can be detailed scheduled to run only at 12 AM on the 1st of September.
 use std::error::Error;
 use std::future::Future;
 use std::sync::Arc;
