@@ -4,6 +4,8 @@ use once_cell::sync::Lazy;
 use std::env;
 use std::sync::{Arc, Mutex};
 
+use crate::error::KohakuError;
+
 // Needs to be generated using: diesel print-schema > src/db/schema.rs
 pub mod schema;
 
@@ -28,7 +30,7 @@ fn establish_connection_pool() -> Pool {
 ///
 /// # Returns
 /// `db::Connection` if a valid connection was established or `diesel::r2d2::Error` if an error occured.
-pub fn get_connection() -> Result<Connection, r2d2::Error> {
+pub fn get_connection() -> Result<Connection, KohakuError> {
     let pool = DB_POOL.lock().unwrap();
-    pool.get()
+    pool.get().map_err(KohakuError::ConnectionPoolError)
 }

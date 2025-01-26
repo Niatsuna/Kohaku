@@ -5,6 +5,7 @@ use tracing_subscriber::FmtSubscriber;
 
 mod core;
 mod db;
+mod error;
 mod hsr;
 
 use core::{scheduler::Scheduler, scrapers};
