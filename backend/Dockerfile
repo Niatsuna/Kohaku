@@ -20,6 +20,7 @@ RUN cargo build --release
 # -----------------------
 # Executing : Application
 FROM debian:bookworm
+RUN apt-get update && apt-get install libpq5 -y
 
 COPY --from=builder /kohaku/target/release/kohaku /kohaku
 CMD ["/kohaku"]
