@@ -8,6 +8,7 @@ use tracing::info;
 use crate::{
     db::{get_connection, schema::urls},
     error::KohakuError,
+    hsr,
 };
 
 use super::scheduler::{Scheduler, Task};
@@ -34,8 +35,14 @@ pub struct NewUrl {
 pub async fn init_scrapers(scheduler: Scheduler) {
     info!("[Scraper] - Setting up scrapers...");
     // Add scrapers to scheduler
-    // Example:
-    //scheduler.add_task(Task::new("scraper1", "* * * * * *", example, false)).await;
+    scheduler
+        .add_task(Task::new(
+            "hsr",
+            hsr::scrapers::SCHEDULE,
+            hsr::scrapers::scrape,
+            false,
+        ))
+        .await;
     info!("[Scraper] - Done");
 }
 
@@ -68,7 +75,7 @@ pub async fn check_scrape_necessity(url: &str, last_modified: &str) -> Result<bo
     if let Some(record_) = record {
         // Entry exists > Check date
         let datetime =
-            DateTime::parse_from_rfc2822(last_modified).map_err(KohakuError::ParseError)?;
+            DateTime::parse_from_rfc2822(last_modified).map_err(KohakuError::ParseTimeError)?;
         let utc_time: DateTime<Utc> = datetime.into();
         return Ok(record_.last_scraped < utc_time);
     }
