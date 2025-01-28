@@ -72,7 +72,7 @@ pub fn format_item(index: &str, data: ParsedItem) -> Result<DatabaseItem, Kohaku
             } else {
                 Some(t)
             }
-        },
+        }
         None => None,
     };
 
@@ -84,7 +84,7 @@ pub fn format_item(index: &str, data: ParsedItem) -> Result<DatabaseItem, Kohaku
             } else {
                 Some(t)
             }
-        },
+        }
         None => None,
     };
 
@@ -95,7 +95,14 @@ pub fn format_item(index: &str, data: ParsedItem) -> Result<DatabaseItem, Kohaku
         .map(|src| src.desc.clone())
         .collect::<Vec<String>>();
 
-    let filename = data.icon_path.split('/').last().unwrap_or("").split('.').next().unwrap_or("");
+    let filename = data
+        .icon_path
+        .split('/')
+        .last()
+        .unwrap_or("")
+        .split('.')
+        .next()
+        .unwrap_or("");
     let icon_path = format!("itemfigures/{filename}.webp");
 
     let api_url = format!("{BASE_URL}/{API_ENDPOINT}/{index}.json");

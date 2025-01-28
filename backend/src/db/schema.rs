@@ -24,7 +24,4 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    hsr_items,
-    urls,
-);
+diesel::allow_tables_to_appear_in_same_query!(hsr_items, urls,);
