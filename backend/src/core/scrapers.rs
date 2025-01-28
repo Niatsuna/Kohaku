@@ -18,6 +18,7 @@ use super::scheduler::{Scheduler, Task};
 #[derive(Queryable, Debug)]
 #[diesel(table_name = urls)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
+#[allow(dead_code)]
 pub struct Url {
     pub id: i32,
     pub addr: String,
