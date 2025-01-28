@@ -1,4 +1,4 @@
-use actix_web::{web, App, HttpResponse, HttpServer};
+use actix_web::{App, HttpServer};
 use std::env;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -42,20 +42,8 @@ async fn main() -> std::io::Result<()> {
         .expect("SERVER_PORT must be a valid port number");
 
     // Start actix web server
-    HttpServer::new(|| {
-        App::new()
-            .service(
-                // API
-                web::scope("/api").default_service(
-                    web::route()
-                        .to(|| async { HttpResponse::Ok().json("API development placeholder") }),
-                ),
-            ) // Other Endpoints
-            .default_service(
-                web::route().to(|| async { HttpResponse::NotFound().body("404 Not Found") }),
-            )
-    })
-    .bind((server_addr, server_port))?
-    .run()
-    .await
+    HttpServer::new(|| App::new().configure(core::config::configure))
+        .bind((server_addr, server_port))?
+        .run()
+        .await
 }
