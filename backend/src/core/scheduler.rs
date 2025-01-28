@@ -19,6 +19,7 @@ pub struct Task<F>
 where
     F: Future,
 {
+    #[allow(dead_code)]
     pub name: String,
     pub cron: String,
     pub func: fn() -> F,
