@@ -23,6 +23,10 @@ pub enum KohakuError {
     #[error("Serialization error (serde): {0}")]
     SerdeError(#[from] serde_json::Error),
 
+    // Handler Errors
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] validator::ValidationErrors),
+
     // Others
     #[error("Kohaku Custom Error: {0}")]
     CustomError(String),
@@ -39,6 +43,7 @@ impl ResponseError for KohakuError {
             KohakuError::ParseStrError(_) => HttpResponse::BadRequest().body(msg),
             KohakuError::RequestError(_) => HttpResponse::BadGateway().body(msg),
             KohakuError::SerdeError(_) => HttpResponse::UnprocessableEntity().body(msg),
+            KohakuError::ValidationError(_) => HttpResponse::BadRequest().body(msg),
             _ => HttpResponse::InternalServerError().body(msg),
         }
     }
