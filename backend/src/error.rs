@@ -12,14 +12,20 @@ pub enum KohakuError {
 
     // Scraper Errors
     #[error("Parse error (Time): {0}")]
-    ParseError(#[from] chrono::format::ParseError),
+    ParseTimeError(#[from] chrono::format::ParseError),
+
+    #[error("Parse error (Str): {0}")]
+    ParseStrError(#[from] reqwest::header::ToStrError),
 
     #[error("Request error: {0}")]
     RequestError(#[from] reqwest::Error),
 
     #[error("Serialization error (serde): {0}")]
     SerdeError(#[from] serde_json::Error),
+
     // Others
+    #[error("Kohaku Custom Error: {0}")]
+    CustomError(String),
 }
 
 #[allow(unreachable_patterns)]
@@ -29,7 +35,8 @@ impl ResponseError for KohakuError {
         match self {
             KohakuError::ConnectionPoolError(_) => HttpResponse::ServiceUnavailable().body(msg),
             KohakuError::QueryResultError(_) => HttpResponse::InternalServerError().body(msg),
-            KohakuError::ParseError(_) => HttpResponse::BadRequest().body(msg),
+            KohakuError::ParseTimeError(_) => HttpResponse::BadRequest().body(msg),
+            KohakuError::ParseStrError(_) => HttpResponse::BadRequest().body(msg),
             KohakuError::RequestError(_) => HttpResponse::BadGateway().body(msg),
             KohakuError::SerdeError(_) => HttpResponse::UnprocessableEntity().body(msg),
             _ => HttpResponse::InternalServerError().body(msg),
