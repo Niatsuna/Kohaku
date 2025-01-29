@@ -44,6 +44,25 @@ fn _format_rarity(rarity: &str) -> Option<i32> {
     }
 }
 
+fn _format_type(type_ : &str) -> Option<String> {
+    let res = match type_ {
+        "Knight" => "Preservation",
+        "Mage" => "Erudition",
+        "Memory" => "Remembrance",
+        "Priest" => "Abundance", 
+        "Rogue" => "The Hunt",
+        "Shaman" => "Harmony",
+        "Warrior" => "Destruction",
+        "Warlock" => "Nihility",
+        _ => ""
+    };
+    if res == "" {
+        None
+    } else {
+        Some(res.to_string())
+    }
+}
+
 pub fn format_item(index: &str, data: ParsedItem) -> Result<DatabaseItem, KohakuError> {
     let name = data.name.clone();
 
