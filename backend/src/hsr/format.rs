@@ -34,6 +34,18 @@ fn _format_purpose(purpose: &i32) -> Option<Vec<String>> {
 }
 
 fn _format_rarity(rarity: &str) -> Option<i32> {
+    if rarity.starts_with("CombatPower") {
+        // Lightcone / Character
+        let c = rarity.chars().last().unwrap().to_string();
+        let i : Result<i32, _> = c.parse();
+        if let Ok(rrty) = i {
+            // Parsing successful
+            return Some(rrty);
+        }
+        // Failed to parse last character to integer
+        return  None;
+    }
+    // Items
     match rarity {
         "Normal" => Some(1),
         "NotNormal" => Some(2),
