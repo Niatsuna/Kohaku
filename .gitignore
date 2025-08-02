@@ -8,5 +8,6 @@ debug/
 env/
 ENV/
 env.bak/
+target/
 venv/
 venv.bak/
