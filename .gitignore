@@ -1,0 +1,12 @@
+.vscode
+.env
+.venv
+__pycache__/
+**/*.rs.bk
+Cargo.lock
+debug/
+env/
+ENV/
+env.bak/
+venv/
+venv.bak/
