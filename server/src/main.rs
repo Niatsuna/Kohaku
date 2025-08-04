@@ -2,6 +2,8 @@ use actix_web::{App, HttpServer};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
+mod error;
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
