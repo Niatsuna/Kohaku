@@ -1,0 +1,17 @@
+### Application specific ###
+.env
+
+### IDE ###
+.vscode
+.venv
+
+### Rust ###
+debug/
+target/
+
+**/*.rs.bk
+
+Cargo.lock
+
+### Python ###
+__pycache__/
