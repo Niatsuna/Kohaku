@@ -1,6 +1,10 @@
 use actix_web::{App, HttpServer};
-use tracing::{info, Level};
+use tracing::{error, info, Level};
 use tracing_subscriber::FmtSubscriber;
+
+use crate::utils::scheduler::scheduler::{get_scheduler, init_scheduler};
+
+mod utils;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -14,7 +18,19 @@ async fn main() -> std::io::Result<()> {
         .with_thread_ids(true)
         .pretty()
         .init();
-    info!("Logging initialized! Starting server ...");
+    info!("Logging initialized! Initializing scheduler ...");
+
+    // Start scheduler
+    if let Err(_) = init_scheduler().await {
+        error!("Couldn't initialize scheduler!");
+    } else {
+        info!("Scheduler initilialized! Starting scheduler ...");
+        let scheduler = get_scheduler().await;
+        if let Err(_) = scheduler.start().await {
+            error!("Couldn't start scheduler!");
+        }
+        info!("Scheduler started!");
+    }
 
     let server_addr: String = "127.0.0.1".to_string();
     let server_port: u16 = 8080;
