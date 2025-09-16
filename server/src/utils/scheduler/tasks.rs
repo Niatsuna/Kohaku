@@ -55,10 +55,10 @@ macro_rules! impl_task_wrapper {
             impl $crate::utils::scheduler::tasks::Runnable for $t {
               async fn run(&self) -> () {
                 if let Err(e) = self.execute().await {
-                  error!("[ Task - {} ] - Failure detected: {e}", self.0.name);
+                  tracing::error!("[ Task - {} ] - Failure detected: {}", self.0.name, e);
                   return;
                 }
-                info!("[ Task - {} ] - Done!", self.0.name);
+                tracing::info!("[ Task - {} ] - Done!", self.0.name);
               }
             }
         )*

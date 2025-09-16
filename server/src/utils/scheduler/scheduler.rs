@@ -1,7 +1,7 @@
 use std::{error::Error, sync::Arc};
 
 use tokio::sync::{Mutex, OnceCell};
-use tokio_cron_scheduler::{Job, JobScheduler};
+use tokio_cron_scheduler::{job::job_data::Uuid, Job, JobScheduler};
 
 use crate::utils::scheduler::tasks::{Runnable, Task};
 
@@ -18,7 +18,7 @@ impl Scheduler {
     }
 
     /// Schedule a given task for the scheduler
-    pub async fn add_task<T>(&self, task: T) -> Result<(), Box<dyn Error>>
+    pub async fn add_task<T>(&self, task: T) -> Result<Uuid, Box<dyn Error>>
     where
         T: Runnable + std::ops::Deref<Target = Task> + 'static + Send + Sync,
     {
@@ -40,8 +40,8 @@ impl Scheduler {
         })?;
 
         let scheduler = self.scheduler.lock().await;
-        scheduler.add(job).await?;
-        Ok(())
+        let uuid = scheduler.add(job).await?;
+        Ok(uuid.into())
     }
 
     /// Start scheduler
@@ -63,6 +63,6 @@ pub async fn init_scheduler() -> Result<(), Box<dyn std::error::Error>> {
 pub async fn get_scheduler() -> Arc<Scheduler> {
     SCHEDULER
         .get()
-        .expect("Scheduler not initilized - call init_scheduler first")
+        .expect("Scheduler not initialized - call init_scheduler first")
         .clone()
 }
