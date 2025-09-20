@@ -18,7 +18,7 @@ use crate::{
 
 #[tokio::test]
 #[should_panic]
-async fn test_scheduler_not_initilized_before_get() {
+async fn test_scheduler_not_initialized_before_get() {
     let _ = get_scheduler().await;
 }
 

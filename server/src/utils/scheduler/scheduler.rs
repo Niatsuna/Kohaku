@@ -56,7 +56,7 @@ pub async fn init_scheduler() -> Result<(), Box<dyn std::error::Error>> {
     let scheduler = Arc::new(Scheduler::new().await?);
     SCHEDULER
         .set(scheduler)
-        .map_err(|_| "Scheduler already initilized")?;
+        .map_err(|_| "Scheduler already initialized")?;
     Ok(())
 }
 
