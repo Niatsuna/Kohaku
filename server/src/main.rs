@@ -1,17 +1,24 @@
 use actix_web::{App, HttpServer};
-use tracing::{error, info, Level};
+use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 
-use crate::utils::scheduler::scheduler::{get_scheduler, init_scheduler};
+use crate::utils::{
+    config::{get_config, init_config},
+    scheduler::scheduler::{get_scheduler, init_scheduler},
+};
 
 mod utils;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
+    if let Err(_) = init_config() {
+        error!("Couldn't initialize config!");
+    }
+    let config = get_config();
 
     FmtSubscriber::builder()
-        .with_max_level(Level::DEBUG)
+        .with_max_level(config.logging_level)
         .with_line_number(true)
         .with_file(true)
         .with_target(false)
@@ -32,11 +39,8 @@ async fn main() -> std::io::Result<()> {
         info!("Scheduler started!");
     }
 
-    let server_addr: String = "127.0.0.1".to_string();
-    let server_port: u16 = 8080;
-
     HttpServer::new(|| App::new())
-        .bind((server_addr, server_port))?
+        .bind((config.server_addr.clone(), config.server_port))?
         .run()
         .await
 }
