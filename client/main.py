@@ -1,1 +1,24 @@
-print('Hello World!')
+import disnake
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+intents = disnake.Intents.default()
+intents.message_content = True
+
+client = disnake.Client(intents=intents)
+
+@client.event
+async def on_ready():
+  print(f'We have logged in as {client.user}')
+
+@client.event
+async def on_message(message):
+  if message.author == client.user:
+    return
+  if message.content.startswith('-hello'):
+    await message.channel.send('Hi~')
+
+CLIENT_TOKEN=os.getenv('CLIENT_TOKEN')
+client.run(CLIENT_TOKEN)
