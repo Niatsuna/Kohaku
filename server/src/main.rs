@@ -7,6 +7,7 @@ use crate::utils::{
     scheduler::scheduler::{get_scheduler, init_scheduler},
 };
 
+mod db;
 mod utils;
 
 #[actix_web::main]
