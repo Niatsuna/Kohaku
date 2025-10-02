@@ -1,24 +1,46 @@
-import disnake
-from dotenv import load_dotenv
-import os
+import logging
+from disnake import Intents
+import sys
 
-load_dotenv()
+from core.config import get_config
+from core.client import Client
 
-intents = disnake.Intents.default()
-intents.message_content = True
+def setup_logging(log_level: str):
+  """Configure project-wide logging"""
+  root_logger = logging.getLogger()
+  root_logger.setLevel(log_level)
 
-client = disnake.Client(intents=intents)
+  console_handler = logging.StreamHandler(sys.stdout)
+  console_handler.setLevel(log_level)
 
-@client.event
-async def on_ready():
-  print(f'We have logged in as {client.user}')
+  formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+  )
+  console_handler.setFormatter(formatter)
 
-@client.event
-async def on_message(message):
-  if message.author == client.user:
-    return
-  if message.content.startswith('-hello'):
-    await message.channel.send('Hi~')
+  root_logger.handlers.clear()
+  root_logger.addHandler(console_handler)
 
-CLIENT_TOKEN=os.getenv('CLIENT_TOKEN')
-client.run(CLIENT_TOKEN)
+
+def main():
+  config = get_config()
+
+  setup_logging(config.logging_level)
+
+  logger = logging.getLogger(__name__)
+  logger.info('Starting Kohaku Client ...')
+
+  intents = Intents.default()
+  intents.message_content = True
+
+  client = Client(
+    config,
+    command_prefix=config.prefix,
+    intents=intents,
+  )
+
+  client.run(config.token)
+
+if __name__ == "__main__":
+  main()
