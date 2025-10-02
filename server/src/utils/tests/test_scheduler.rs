@@ -10,10 +10,7 @@ use serial_test::serial;
 
 use crate::{
     impl_task_wrapper,
-    utils::scheduler::{
-        scheduler::{get_scheduler, init_scheduler, Scheduler},
-        tasks::Task,
-    },
+    utils::scheduler::{get_scheduler, init_scheduler, tasks::Task, Scheduler},
 };
 
 #[tokio::test]

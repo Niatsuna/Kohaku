@@ -12,8 +12,6 @@ fn setup_env_vars(only_required: bool) {
         env::set_var("SERVER_ADDR", "localhost");
         env::set_var("SERVER_PORT", "9000");
         env::set_var("SERVER_LOGGING_LEVEL", "WARN");
-        env::set_var("CLIENT_ADDR", "localhost2");
-        env::set_var("CLIENT_PORT", "1234");
     }
 }
 
@@ -23,8 +21,6 @@ fn cleanup_env_vars() {
         "SERVER_PORT",
         "SERVER_LOGGING_LEVEL",
         "DATABASE_URL",
-        "CLIENT_ADDR",
-        "CLIENT_PORT",
     ];
     for v in vars {
         env::remove_var(v);
@@ -67,8 +63,6 @@ fn test_config_with_env_vars() {
     assert_eq!(config.server_port, 9000);
     assert_eq!(config.logging_level, tracing::Level::WARN);
     assert_eq!(config.database_url, "some_url/db");
-    assert_eq!(config.client_addr, "localhost2");
-    assert_eq!(config.client_port, 1234);
 
     cleanup_env_vars();
 }
@@ -82,8 +76,6 @@ fn test_config_defaults() {
     assert_eq!(config.server_addr, "127.0.0.1");
     assert_eq!(config.server_port, 8080);
     assert_eq!(config.logging_level, tracing::Level::INFO);
-    assert_eq!(config.client_addr, "127.0.0.1");
-    assert_eq!(config.client_port, 8081);
 
     cleanup_env_vars();
 }
@@ -100,9 +92,6 @@ fn test_missing_required_env_var() {
 #[case("SERVER_PORT", "abc")]
 #[case("SERVER_PORT", "1.5")]
 #[case("SERVER_PORT", "-1")]
-#[case("CLIENT_PORT", "abc")]
-#[case("CLIENT_PORT", "-1")]
-#[case("CLIENT_PORT", "1.5")]
 #[serial]
 fn test_parsing_fails(#[case] env_name: &str, #[case] invalid_value: &str) {
     setup_env_vars(true);
@@ -117,8 +106,6 @@ fn test_parsing_fails(#[case] env_name: &str, #[case] invalid_value: &str) {
 #[rstest]
 #[case("SERVER_PORT", "8080")]
 #[case("SERVER_PORT", "1234")]
-#[case("CLIENT_PORT", "8080")]
-#[case("CLIENT_PORT", "1234")]
 #[case("SERVER_LOGGING_LEVEL", "INFO")]
 #[case("SERVER_LOGGING_LEVEL", "ERROR")]
 #[case("SERVER_LOGGING_LEVEL", "WARN")]

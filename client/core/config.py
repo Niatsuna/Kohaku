@@ -1,13 +1,14 @@
-from dataclasses import dataclass
 import logging
 import os
-from typing import Optional
+from dataclasses import dataclass
+
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 load_dotenv()
+
 
 @dataclass(frozen=True)
 class Config:
@@ -18,9 +19,9 @@ class Config:
     server_addr: str
     server_port: str
     secret: str
-    
+
     logging_level: str = "INFO"
-    owner_id: Optional[int] = None
+    owner_id: int | None = None
 
     def __post_init__(self):
         required = {
@@ -28,22 +29,22 @@ class Config:
             "CLIENT_PREFIX": self.prefix,
             "SERVER_ADDR": self.server_addr,
             "SERVER_PORT": self.server_port,
-            "SECRET": self.secret
+            "SECRET": self.secret,
         }
-        
-        for (name, val) in required.items():
+
+        for name, val in required.items():
             if not val:
-                raise ValueError(f'{name} must be set!')
-        
+                raise ValueError(f"{name} must be set!")
+
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         if self.logging_level.upper() not in valid_levels:
             raise ValueError(
-                f'Invalid CLIENT_LOGGING_LEVEL! '
-                f'CLIENT_LOGGING_LEVEL must be one of these values: {valid_levels}'
+                f"Invalid CLIENT_LOGGING_LEVEL! "
+                f"CLIENT_LOGGING_LEVEL must be one of these values: {valid_levels}"
             )
-    
+
     @classmethod
-    def load(cls) -> 'Config':
+    def load(cls) -> "Config":
         """Load configuration from environment variables"""
         try:
             config = cls(
@@ -53,7 +54,9 @@ class Config:
                 server_port=os.getenv("SERVER_PORT", ""),
                 secret=os.getenv("SECRET", ""),
                 logging_level=os.getenv("CLIENT_LOGGING_LEVEL", "INFO"),
-                owner_id=int(os.getenv("CLIENT_OWNER_ID")) if os.getenv("CLIENT_OWNER_ID") else None
+                owner_id=(
+                    int(os.getenv("CLIENT_OWNER_ID")) if os.getenv("CLIENT_OWNER_ID") else None
+                ),
             )
             logger.info("Configuration loaded successfully")
             return config
@@ -61,7 +64,9 @@ class Config:
             logger.error(f"Configuration error: {e}")
             raise
 
-config: Optional[Config] = None
+
+config: Config | None = None
+
 
 def get_config() -> Config:
     """Get the global config instance"""

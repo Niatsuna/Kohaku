@@ -9,7 +9,7 @@ fn read_env(name: &str, default: Option<&str>) -> String {
         value.unwrap_or_else(|_| def.to_string())
     } else {
         value
-            .expect(format!("{} not set!", name).as_str())
+            .unwrap_or_else(|_| panic!("{} not set!", name))
             .to_string()
     }
 }
@@ -26,10 +26,6 @@ pub struct Config {
 
     // Database
     pub database_url: String,
-
-    // Discord
-    pub client_addr: String,
-    pub client_port: u16,
 }
 
 impl Config {
@@ -45,10 +41,6 @@ impl Config {
             ))
             .unwrap(),
             database_url: read_env("DATABASE_URL", None),
-            client_addr: read_env("CLIENT_ADDR", Some("127.0.0.1")),
-            client_port: read_env("CLIENT_PORT", Some("8081"))
-                .parse()
-                .expect("CLIENT_PORT must be a valid port number"),
         }
     }
 }

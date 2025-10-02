@@ -5,8 +5,6 @@ use diesel::r2d2::{ConnectionManager, PooledConnection};
 
 use once_cell::sync::Lazy;
 
-use r2d2;
-
 use crate::utils::config::get_config;
 
 pub mod schema;
