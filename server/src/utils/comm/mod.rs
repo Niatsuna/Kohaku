@@ -1,0 +1,44 @@
+use serde::{self, Deserialize, Serialize};
+use serde_json::json;
+use tracing::info;
+
+use crate::utils::comm::ws::send_message;
+
+pub mod auth;
+pub mod ws;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum MessageType {
+    #[serde(rename = "auth")]
+    Authorization,
+    #[serde(rename = "ping")]
+    Ping { id: String },
+    #[serde(rename = "pong")]
+    Pong { id: String },
+    #[serde(rename = "notification")]
+    Notification { data: serde_json::Value },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WsMessage {
+    timestamp: i64,
+    message_id: String,
+    message: MessageType,
+}
+
+pub async fn process_message(data: serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {
+    // TODO: Implement actual behaivor based on features
+    let datas = data.as_str().unwrap();
+    info!(datas);
+    Ok(())
+}
+
+/// Notifies client with given payload.
+/// Requirement: Payload must be serializeable
+pub async fn notify_client<T: Serialize>(payload: T) -> Result<(), Box<dyn std::error::Error>> {
+    let message = MessageType::Notification {
+        data: json!(payload),
+    };
+    send_message(message).await
+}

@@ -26,6 +26,9 @@ pub struct Config {
 
     // Database
     pub database_url: String,
+
+    // Client-communication
+    pub secret: Vec<u8>,
 }
 
 impl Config {
@@ -41,6 +44,7 @@ impl Config {
             ))
             .unwrap(),
             database_url: read_env("DATABASE_URL", None),
+            secret: read_env("SECRET", None).into_bytes(),
         }
     }
 }

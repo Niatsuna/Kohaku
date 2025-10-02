@@ -1,8 +1,10 @@
+import asyncio
 import logging
 from pathlib import Path
 
 from disnake.ext import commands
 
+from core.comm import WebSocketClient
 from core.config import Config
 
 logger = logging.getLogger(__name__)
@@ -34,16 +36,17 @@ class Client(commands.Bot):
         logger.info(f"Loaded {len(self.extensions)} cogs")
 
         # Websocket ( = Communication to backend)
-        # TODO: Implement this
+        uri = f"ws://{self.config.server_addr}:{self.config.server_port}/ws"
+        self.websocket = WebSocketClient(uri, secret=self.config.secret)
 
     async def on_ready(self):
         await self.load_features()
+        await asyncio.create_task(self.websocket.run())  # Starts websocket
+
         logger.info(f"Kohaku is ready! Logged in as {self.user}")
         logger.info(f"Connected to {len(self.guilds)} guilds")
 
     async def close(self):
         logger.info("Shutting down bot...")
-
-        # TODO: Implement websocket disconnect here!
-
+        self.websocket.stop()
         await super().close()

@@ -1,8 +1,9 @@
-use actix_web::{App, HttpServer};
+use actix_web::{web, App, HttpServer};
 use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 
 use crate::utils::{
+    comm::ws::{init_client_session, websocket_handler},
     config::{get_config, init_config},
     scheduler::{get_scheduler, init_scheduler},
 };
@@ -40,7 +41,10 @@ async fn main() -> std::io::Result<()> {
         info!("Scheduler started!");
     }
 
-    HttpServer::new(|| App::new())
+    // Start websocket
+    init_client_session();
+
+    HttpServer::new(|| App::new().route("/ws", web::get().to(websocket_handler)))
         .bind((config.server_addr.clone(), config.server_port))?
         .run()
         .await
