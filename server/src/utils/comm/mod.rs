@@ -22,9 +22,9 @@ pub enum MessageType {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WsMessage {
-    timestamp: i64,
-    message_id: String,
-    message: MessageType,
+    pub timestamp: i64,
+    pub message_id: String,
+    pub message: MessageType,
 }
 
 pub async fn process_message(data: serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {

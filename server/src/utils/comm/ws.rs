@@ -30,14 +30,14 @@ use crate::utils::{
 static CLIENT_SESSION: OnceCell<Arc<RwLock<Option<Session>>>> = OnceCell::new();
 
 /// RateLimiter for WebSocket messages.
-struct RateLimiter {
+pub struct RateLimiter {
     messages: Vec<i64>,
     max_messages: usize,
     window_secs: i64,
 }
 
 impl RateLimiter {
-    fn new(max_messages: usize, window_secs: i64) -> Self {
+    pub fn new(max_messages: usize, window_secs: i64) -> Self {
         Self {
             messages: Vec::new(),
             max_messages,
@@ -45,7 +45,7 @@ impl RateLimiter {
         }
     }
 
-    fn check_and_add(&mut self) -> bool {
+    pub fn check_and_add(&mut self) -> bool {
         let now = Utc::now().timestamp();
         let cutoff = now - self.window_secs;
 
