@@ -47,5 +47,6 @@ class Client(commands.Bot):
 
     async def close(self):
         logger.info("Shutting down bot...")
-        await self.websocket.stop()
+        if self.websocket is not None:
+            await self.websocket.stop()
         await super().close()

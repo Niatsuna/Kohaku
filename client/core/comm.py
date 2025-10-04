@@ -38,7 +38,7 @@ class WebSocketClient:
         self.running = False
         self.connected = False
         self.reconnect_delay = 5
-        self.max_reconnect_delay = 300
+        self.max_reconnect_delay = 30
         self.pending_responses: dict[str, asyncio.Future] = {}
 
     def sign_message(self, message: WsMessage) -> str:
@@ -149,7 +149,12 @@ class WebSocketClient:
                 await asyncio.sleep(self.reconnect_delay)
 
                 # Exponential backoff
-                self.reconnect_delay = min(self.reconnect_delay * 2, self.max_reconnect_delay)
+                if self.reconnect_delay < self.max_reconnect_delay:
+                    self.reconnect_delay = min(self.reconnect_delay * 2, self.max_reconnect_delay)
+                else:
+                    # If connection could not be established by now, discard the websocket connection completely
+                    logger.error("Couldn't establish connection! Discarding attempt completely!")
+                    await self.stop()
 
     async def connect(self):
         """Connect to WebSocket with authentication"""
