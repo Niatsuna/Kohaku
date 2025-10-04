@@ -21,7 +21,6 @@ class Client(commands.Bot):
     async def load_features(self):
         """Loads features like the commands and the websocket"""
         # Cogs ( = Commands)
-        print("=== SETUP_HOOK CALLED ===")  # ← This should appear!
         logger.info("Loading cogs...")
 
         cogs_dir = Path(__file__).parent.parent / "cogs"
@@ -29,7 +28,7 @@ class Client(commands.Bot):
 
         for cog_name in cog_files:
             try:
-                await self.load_extension(f"cogs.{cog_name}")
+                self.load_extension(f"cogs.{cog_name}")
             except Exception as e:
                 logger.error(f"Failed to load cogs.{cog_name}: {e}", exc_info=True)
 
@@ -48,5 +47,5 @@ class Client(commands.Bot):
 
     async def close(self):
         logger.info("Shutting down bot...")
-        self.websocket.stop()
+        await self.websocket.stop()
         await super().close()
