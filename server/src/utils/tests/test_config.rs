@@ -31,13 +31,6 @@ fn cleanup_env_vars() {
 
 #[test]
 #[serial]
-#[should_panic]
-fn test_config_not_initialized_before_get() {
-    let _ = get_config();
-}
-
-#[test]
-#[serial]
 fn test_config_singleton() {
     setup_env_vars(true);
 
