@@ -83,6 +83,25 @@ While the prior sections cover simple deployment installations, some tools could
 - [diesel cli](https://diesel.rs/guides/getting-started) - Database migrations (Backend), can be installed via `cargo install diesel_cli`
 - Linter & Checker (Client) - Better code quality of client, pre-configured, can be installed via `pip install -r requirements-dev.txt`
 
+Additionally, Makefiles present shortcut executions for formatting and checking both server and client.
+<details>
+<summary> Makefile Usage </summary>
+
+The root makefile harbors six commands:
+```sh
+make fmt              # Formats server & client
+make fmt-server       # Formats only server
+make fmt-client       # Formats only client
+
+make check            # Checks server & client
+make check-server     # Checks only server
+make check-client     # Checks only client
+```
+The makefiles in each directory (`server/` and `client/`) feature delegation of these commands.
+Thus, `make fmt` in `server/` is equal to `make fmt-server` in `server/` and `make fmt-client` is disabled. The same applies to the other commands and to `client/`s makefile.
+
+</details>
+
 <!-- USAGE EXAMPLES -->
 ## Usage
 After deployment, the backend runs autonomously, and run scheduled tasks to guarantee the freshness of stored data.
