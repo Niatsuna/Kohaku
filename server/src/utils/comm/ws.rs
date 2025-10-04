@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use actix_web::{web, Error, HttpRequest, HttpResponse};
+use actix_web::{web, HttpRequest, HttpResponse};
 use actix_ws::{Message, Session};
 use chrono::Utc;
 use futures_util::StreamExt as _;
@@ -17,6 +17,7 @@ use crate::utils::{
         process_message, MessageType, WsMessage,
     },
     config::get_config,
+    error::KohakuError,
 };
 
 /*
@@ -71,12 +72,14 @@ pub fn init_client_session() {
 }
 
 /// Sends a message to the connected client.
-pub async fn send_message(input: MessageType) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn send_message(input: MessageType) -> Result<(), KohakuError> {
     let config = get_config();
 
     let session_lock = CLIENT_SESSION
         .get()
-        .ok_or("Client session not initialized")?;
+        .ok_or(KohakuError::InternalServerError(
+            "[WS] WebSocket Client not initialized".to_string(),
+        ))?;
     let mut session_guard = session_lock.write().await;
 
     let message = WsMessage {
@@ -87,10 +90,18 @@ pub async fn send_message(input: MessageType) -> Result<(), Box<dyn std::error::
 
     if let Some(session) = session_guard.as_mut() {
         let signed = sign_message(&message, &config.secret);
-        session.text(signed).await?;
+        session
+            .text(signed)
+            .await
+            .map_err(|e| KohakuError::OperationError {
+                operation: "Websocket-Session-Text".to_string(),
+                source: Box::new(e),
+            })?;
         Ok(())
     } else {
-        Err("No client connected".into())
+        Err(KohakuError::InternalServerError(
+            "[WS] No client connected".to_string(),
+        ))
     }
 }
 
@@ -111,11 +122,13 @@ async fn close_session() {
 pub async fn websocket_handler(
     req: HttpRequest,
     stream: web::Payload,
-) -> Result<HttpResponse, Error> {
+) -> Result<HttpResponse, KohakuError> {
     let config = get_config();
     let secret = config.secret.clone();
 
-    let (response, mut session, stream) = actix_ws::handle(&req, stream)?;
+    let (response, mut session, stream) = actix_ws::handle(&req, stream).map_err(|e| {
+        KohakuError::InternalServerError(format!("[WS] Error while handling incoming stream: {e}"))
+    })?;
     let state = Arc::new(Mutex::new(ConnectionState {
         rate_limiter: RateLimiter::new(20, 60),
         authenticated: false,

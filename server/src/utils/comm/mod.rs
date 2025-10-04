@@ -2,7 +2,7 @@ use serde::{self, Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
 
-use crate::utils::comm::ws::send_message;
+use crate::utils::{comm::ws::send_message, error::KohakuError};
 
 pub mod auth;
 pub mod ws;
@@ -27,7 +27,7 @@ pub struct WsMessage {
     pub message: MessageType,
 }
 
-pub async fn process_message(data: serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn process_message(data: serde_json::Value) -> Result<(), KohakuError> {
     // TODO: Implement actual behaivor based on features
     let datas = data.as_str().unwrap();
     info!(datas);
@@ -36,9 +36,11 @@ pub async fn process_message(data: serde_json::Value) -> Result<(), Box<dyn std:
 
 /// Notifies client with given payload.
 /// Requirement: Payload must be serializeable
-pub async fn notify_client<T: Serialize>(payload: T) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn notify_client<T: Serialize>(payload: T) -> Result<(), KohakuError> {
     let message = MessageType::Notification {
         data: json!(payload),
     };
-    send_message(message).await
+    send_message(message).await.map_err(|e| {
+        KohakuError::InternalServerError(format!("Couldn't notify client via websocket: {e}"))
+    })
 }

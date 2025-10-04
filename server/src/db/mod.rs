@@ -6,6 +6,7 @@ use diesel::r2d2::{ConnectionManager, PooledConnection};
 use once_cell::sync::Lazy;
 
 use crate::utils::config::get_config;
+use crate::utils::error::KohakuError;
 
 pub mod schema;
 
@@ -24,7 +25,7 @@ fn establish_connection_pool() -> Pool {
         .expect("Failed to create pool!")
 }
 
-pub fn get_connection() -> Result<Connection, r2d2::Error> {
+pub fn get_connection() -> Result<Connection, KohakuError> {
     let pool = DB_POLL.lock().unwrap();
-    pool.get()
+    pool.get().map_err(KohakuError::DatabaseConnectionError)
 }

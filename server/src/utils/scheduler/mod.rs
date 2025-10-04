@@ -4,7 +4,10 @@ use tokio::sync::{Mutex, OnceCell};
 use tokio_cron_scheduler::{job::job_data::Uuid, Job, JobScheduler};
 
 pub mod tasks;
-use crate::utils::scheduler::tasks::{Runnable, Task};
+use crate::utils::{
+    error::KohakuError,
+    scheduler::tasks::{Runnable, Task},
+};
 
 static SCHEDULER: OnceCell<Arc<Scheduler>> = OnceCell::const_new();
 pub struct Scheduler {
@@ -19,7 +22,7 @@ impl Scheduler {
     }
 
     /// Schedule a given task for the scheduler
-    pub async fn add_task<T>(&self, task: T) -> Result<Uuid, Box<dyn Error>>
+    pub async fn add_task<T>(&self, task: T) -> Result<Uuid, KohakuError>
     where
         T: Runnable + std::ops::Deref<Target = Task> + 'static + Send + Sync,
     {
@@ -38,26 +41,44 @@ impl Scheduler {
                     }
                 })
             }
+        })
+        .map_err(|e| KohakuError::OperationError {
+            operation: "Scheduler-Job-Creation".to_string(),
+            source: Box::new(e),
         })?;
 
         let scheduler = self.scheduler.lock().await;
-        let uuid = scheduler.add(job).await?;
+        let uuid = scheduler
+            .add(job)
+            .await
+            .map_err(|e| KohakuError::OperationError {
+                operation: "Scheduler-Job-Add".to_string(),
+                source: Box::new(e),
+            })?;
         Ok(uuid.into())
     }
 
     /// Start scheduler
-    pub async fn start(&self) -> Result<(), Box<dyn Error>> {
+    pub async fn start(&self) -> Result<(), KohakuError> {
         let scheduler = self.scheduler.lock().await;
-        scheduler.start().await?;
+        scheduler
+            .start()
+            .await
+            .map_err(|e| KohakuError::OperationError {
+                operation: "Scheduler-Start".to_string(),
+                source: Box::new(e),
+            })?;
         Ok(())
     }
 }
 
-pub async fn init_scheduler() -> Result<(), Box<dyn std::error::Error>> {
-    let scheduler = Arc::new(Scheduler::new().await?);
-    SCHEDULER
-        .set(scheduler)
-        .map_err(|_| "Scheduler already initialized")?;
+pub async fn init_scheduler() -> Result<(), KohakuError> {
+    let scheduler = Arc::new(Scheduler::new().await.map_err(|e| {
+        KohakuError::InternalServerError(format!("Scheduler couldn't be created: {e}"))
+    })?);
+    SCHEDULER.set(scheduler).map_err(|_| {
+        KohakuError::InternalServerError("Scheduler already initialized".to_string())
+    })?;
     Ok(())
 }
 
