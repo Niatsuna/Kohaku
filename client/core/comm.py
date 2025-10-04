@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import time
 import uuid
 from enum import Enum
@@ -10,6 +11,7 @@ from typing import Any
 import websockets
 from websockets.client import WebSocketClientProtocol
 
+logger = logging.getLogger(__name__)
 
 class MessageType(str, Enum):
     AUTHENTIFICATION = "auth"
@@ -34,6 +36,7 @@ class WebSocketClient:
         self.secret = secret
         self.ws: WebSocketClientProtocol | None = None
         self.running = False
+        self.connected = False
         self.reconnect_delay = 5
         self.max_reconnect_delay = 300
         self.pending_responses: dict[str, asyncio.Future] = {}
@@ -50,7 +53,7 @@ class WebSocketClient:
         """Verify and parse an incoming message"""
         parts = data.split(".")
         if len(parts) != 2:
-            print("Invalid message format")
+            logger.warning("Invalid message format")
             return None
 
         payload, signature = parts
@@ -59,7 +62,7 @@ class WebSocketClient:
         expected_sig = hmac.new(self.secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
         if expected_sig != signature:
-            print("Invalid signature")
+            logger.warning("Invalid signature")
             return None
 
         # Parse payload
@@ -71,13 +74,13 @@ class WebSocketClient:
                 message_id=frame_dict["message_id"],
             )
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"Failed to parse message: {e}")
+            logger.warning(f"Failed to parse message: {e}")
             return None
 
         # Check timestamp (reject messages older than 30 seconds)
         now = int(time.time())
         if abs(now - frame.timestamp) > 30:
-            print("Message expired")
+            logger.warning("Message expired")
             return None
 
         return frame
@@ -101,19 +104,19 @@ class WebSocketClient:
             # Respond to ping
             pong = {"type": MessageType.PONG, "id": msg.get("id")}
             await self.send_message(pong)
-            print(f"Responded to ping: {msg.get('id')}")
+            logger.info(f"Responded to ping: {msg.get('id')}")
 
         elif msg_type == MessageType.NOTIFICATION:
             # Handle notification from server
             data = msg.get("data")
-            print(f"Received notification: {data}")
+            logger.info(f"Received notification: {data}")
 
         elif msg_type == MessageType.PONG:
             data = msg.get("id")
-            print(f"Received pong: {data}")
+            logger.info(f"Received pong: {data}")
 
         else:
-            print(f"Unknown message type: {msg_type}")
+            logger.info(f"Unknown message type: {msg_type}")
 
     async def listen(self):
         """Listen for incoming messages"""
@@ -123,11 +126,11 @@ class WebSocketClient:
                 if frame:
                     await self.handle_message(frame)
                 else:
-                    print("Received invalid message")
+                    logger.info("Received invalid message")
         except websockets.exceptions.ConnectionClosed:
-            print("WebSocket connection closed")
+            logger.info("WebSocket connection closed")
         except Exception as e:
-            print(f"Error in listen loop: {e}")
+            logger.info(f"Error in listen loop: {e}")
 
     async def run(self):
         """Main run loop with auto-reconnect"""
@@ -138,10 +141,11 @@ class WebSocketClient:
                 await self.connect()
                 await self.listen()
             except Exception as e:
-                print(f"Connection error: {e}")
+                logger.info(f"Connection error: {e}")
 
             if self.running:
-                print(f"Reconnecting in {self.reconnect_delay} seconds...")
+                self.connected = False
+                logger.info(f"Reconnecting in {self.reconnect_delay} seconds...")
                 await asyncio.sleep(self.reconnect_delay)
 
                 # Exponential backoff
@@ -151,17 +155,19 @@ class WebSocketClient:
         """Connect to WebSocket with authentication"""
         try:
             self.ws = await websockets.connect(self.uri, ping_interval=60, ping_timeout=10)
-            print("WebSocket connected")
+            logger.info("WebSocket connected")
+            self.connected=True
             self.reconnect_delay = 5  # Reset reconnect delay on success
 
             # Send auth message
             await self.send_message({"type": "auth"})
         except Exception as e:
-            print(f"Connection failed: {e}")
+            logger.info(f"Connection failed: {e}")
             raise
 
     async def stop(self):
         """Stop the client and close connection"""
         self.running = False
+        self.connected = False
         if self.ws:
             await self.ws.close()
