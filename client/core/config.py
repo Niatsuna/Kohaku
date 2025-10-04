@@ -22,6 +22,8 @@ class Config:
 
     logging_level: str = "INFO"
     owner_id: int | None = None
+    color_default: int = 0x1b6c8e
+    color_error: int = 0x8e1b1b
 
     def __post_init__(self):
         required = {
