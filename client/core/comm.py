@@ -13,6 +13,7 @@ from websockets.client import WebSocketClientProtocol
 
 logger = logging.getLogger(__name__)
 
+
 class MessageType(str, Enum):
     AUTHENTIFICATION = "auth"
     PING = "ping"
@@ -161,7 +162,7 @@ class WebSocketClient:
         try:
             self.ws = await websockets.connect(self.uri, ping_interval=60, ping_timeout=10)
             logger.info("WebSocket connected")
-            self.connected=True
+            self.connected = True
             self.reconnect_delay = 5  # Reset reconnect delay on success
 
             # Send auth message
