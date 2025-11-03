@@ -39,7 +39,7 @@ class KohakuHelpCommand(commands.HelpCommand):
     def get_decorator_var(self, command, key, default=None):
         try:
             return command.callback.__metadata__[key]
-        except AttributeError:
+        except Exception:
             return default
 
     def get_command_category(self, command):
@@ -50,6 +50,21 @@ class KohakuHelpCommand(commands.HelpCommand):
         if category is None:
             return self.get_command_category(command.parent)
         return category
+    
+    def get_group_title(self, command):
+        """
+        Get group title for display purposes.
+        If command is not part of a group, return None.
+        Otherwise, take title from top-level group.
+        """
+        if command.parent is None:
+            # Top-Level
+            if isinstance(command, commands.Group):
+                # Is Group: Get title
+                return self.get_decorator_var(command, 'title', default=command.name)
+            # Is not a group!
+            return None
+        return self.get_group_title(command.parent)
 
     def get_category_emoji(self, category_name):
         """Get emoji for a category. If not present, default to emoji of 'Other'"""
@@ -64,7 +79,7 @@ class KohakuHelpCommand(commands.HelpCommand):
 
         usage = self.get_decorator_var(command, "usage", default="<args>")
 
-        return f"{self.prefix}{alias} {usage}"
+        return f"{self.prefix}{alias} {usage}".strip()
 
     async def send_bot_help(self, mapping):
         """Sends help for all commands organized by category"""
@@ -133,8 +148,9 @@ class KohakuHelpCommand(commands.HelpCommand):
         embed.add_field(name="💡 Usage", value=f"`{usage}`", inline=False)
 
         footer = f"Category: {emoji} {cat_name}"
-        if isinstance(command.parent, commands.Group):
-            footer += f" | Group: {command.parent.name}"
+        group_title = self.get_group_title(command)
+        if group_title is not None:
+            footer += f" | Group: {group_title}"
 
         embed.set_footer(text=footer)
 
@@ -176,8 +192,9 @@ class KohakuHelpCommand(commands.HelpCommand):
         embed.add_field(name="📖 Subcommands", value=subcommands, inline=False)
 
         footer = f"Category: {emoji} {cat_name}"
-        if isinstance(group.parent, commands.Group):
-            footer += f" | Group: {group.parent.name}"
+        group_title = self.get_group_title(group)
+        if group_title is not None:
+            footer += f" | Group: {group_title}"
 
         embed.set_footer(text=footer)
 
