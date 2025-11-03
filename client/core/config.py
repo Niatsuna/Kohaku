@@ -19,11 +19,11 @@ class Config:
     server_addr: str
     server_port: str
     secret: str
+    repo: str
 
     logging_level: str = "INFO"
-    owner_id: int | None = None
-    color_default: int = 0x1b6c8e
-    color_error: int = 0x8e1b1b
+    color_default: int = 0x1B6C8E
+    color_error: int = 0x8E1B1B
 
     def __post_init__(self):
         required = {
@@ -56,9 +56,7 @@ class Config:
                 server_port=os.getenv("SERVER_PORT", ""),
                 secret=os.getenv("SECRET", ""),
                 logging_level=os.getenv("CLIENT_LOGGING_LEVEL", "INFO"),
-                owner_id=(
-                    int(os.getenv("CLIENT_OWNER_ID")) if os.getenv("CLIENT_OWNER_ID") else None
-                ),
+                repo=os.getenv("CLIENT_REPO_URL"),
             )
             logger.info("Configuration loaded successfully")
             return config
