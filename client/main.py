@@ -5,6 +5,7 @@ from disnake import Intents
 
 from core.client import Client
 from core.config import get_config
+from utils.help import KohakuHelpCommand
 
 
 def setup_logging(log_level: str):
@@ -36,9 +37,7 @@ def main():
     intents.message_content = True
 
     client = Client(
-        config,
-        command_prefix=config.prefix,
-        intents=intents,
+        config, command_prefix=config.prefix, intents=intents, help_command=KohakuHelpCommand()
     )
 
     client.run(config.token)
