@@ -31,7 +31,7 @@ services:
     depends_on:
       - kohaku-server
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
+      - CLIENT_TOKEN=${CLIENT_TOKEN}
       - CLIENT_ADDR=${CLIENT_ADDR}
       - CLIENT_PORT=${CLIENT_PORT}
       - CLIENT_LOGGING_LEVEL=${CLIENT_LOGGING_LEVEL}
