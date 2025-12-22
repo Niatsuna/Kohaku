@@ -1,8 +1,7 @@
-use std::{any::Any, time::Duration};
+use std::time::Duration;
 
 use chrono::Utc;
 use rstest::rstest;
-use tracing::info;
 
 use crate::utils::comm::{
     auth::{sign_message, verify_message},
@@ -139,7 +138,7 @@ async fn test_message_verification_valid_signature() {
         expected_ts, verified_message.timestamp
     );
     assert_eq!(verified_message.message_id, expected_message_id);
-    assert!(matches!(verified_message.message, expected_message));
+    assert_eq!(verified_message.message, expected_message);
 }
 
 #[tokio::test]

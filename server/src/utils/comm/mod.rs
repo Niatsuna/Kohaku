@@ -7,7 +7,7 @@ use crate::utils::{comm::ws::send_message, error::KohakuError};
 pub mod auth;
 pub mod ws;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum MessageType {
     #[serde(rename = "auth")]
