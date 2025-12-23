@@ -6,6 +6,8 @@ use rstest::rstest;
 use serial_test::serial;
 
 fn setup_env_vars(only_required: bool) {
+    cleanup_env_vars(); // Ensure clean-slate
+
     env::set_var("SECRET", "secret");
     env::set_var("DATABASE_URL", "some_url/db");
     if !only_required {
