@@ -12,6 +12,13 @@
     A Discord bot with Rust backend that scrapes, manages and analyzes data, providing information to Discord servers through a REST API.
   </p>
 </div>
+<!-- Top Badges -->
+<div align="center">
+
+  ![server tests](https://img.shields.io/github/actions/workflow/status/Niatsuna/Kohaku/rust-ci.yml?label=Server%20Tests)
+  ![client tests](https://img.shields.io/github/actions/workflow/status/Niatsuna/Kohaku/python-ci.yml?label=Client%20Tests)
+
+</div>
 
 <!-- OVERVIEW -->
 ## Overview
