@@ -1,0 +1,59 @@
+name: Python CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+  workflow_dispatch:
+
+jobs:
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12.4'
+    
+    - name: Install dependencies
+      run: |
+       cd client
+       pip install -r requirements.txt
+       pip install -r requirements-dev.txt
+    
+    - name: Check client formatting
+      run: make check-client
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12.4'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('client/requirements*.txt', 'client/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        cd client
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+    
+    - name: Run client tests
+      run: cd client && pytest
