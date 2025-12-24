@@ -17,8 +17,8 @@ services:
     depends_on:
       - postgres
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - SERVER_ADDR=${SERVER_ADDR}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PWD}@postgres/kohaku
+      - SERVER_ADDR=localhost
       - SERVER_PORT=${SERVER_PORT}
       - SERVER_LOGGING_LEVEL=${SERVER_LOGGING_LEVEL}
       - SECRET=${SECRET}
@@ -32,11 +32,11 @@ services:
       - kohaku-server
     environment:
       - CLIENT_TOKEN=${CLIENT_TOKEN}
-      - CLIENT_ADDR=${CLIENT_ADDR}
+      - CLIENT_ADDR=localhost
       - CLIENT_PORT=${CLIENT_PORT}
       - CLIENT_LOGGING_LEVEL=${CLIENT_LOGGING_LEVEL}
       - CLIENT_PREFIX=${CLIENT_PREFIX}
-      - SERVER_ADDR=${SERVER_ADDR}
+      - SERVER_ADDR=kohaku-server
       - SERVER_PORT=${SERVER_PORT}
       - SECRET=${SECRET}
     ports:
