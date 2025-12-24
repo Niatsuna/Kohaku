@@ -52,7 +52,7 @@ class WebSocketClient:
 
     def verify_message(self, data: str) -> WsMessage | None:
         """Verify and parse an incoming message"""
-        parts = data.split(".")
+        parts = data.rsplit(".", 1)
         if len(parts) != 2:
             logger.warning("Invalid message format")
             return None
