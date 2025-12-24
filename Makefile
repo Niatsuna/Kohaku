@@ -36,3 +36,16 @@ check-server:
 
 # Check everything
 check: check-client check-server
+
+# Test Python client
+test-client:
+	@echo "Testing Python client..."
+	@cd client && pytest
+
+# Test Rust server
+test-server:
+	@echo "Testing Rust server..."
+	@cd server && cargo test
+
+# Test everything
+test: test-client test-server
