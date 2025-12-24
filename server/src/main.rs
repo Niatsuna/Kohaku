@@ -9,6 +9,7 @@ use crate::utils::{
 };
 
 mod db;
+mod services;
 mod utils;
 
 #[actix_web::main]
