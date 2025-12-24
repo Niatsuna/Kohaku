@@ -2,11 +2,14 @@ use actix_web::{web, App, HttpServer};
 use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 
-use crate::{db::migrate, utils::{
-    comm::ws::{init_client_session, websocket_handler},
-    config::{get_config, init_config},
-    scheduler::{get_scheduler, init_scheduler},
-}};
+use crate::{
+    db::migrate,
+    utils::{
+        comm::ws::{init_client_session, websocket_handler},
+        config::{get_config, init_config},
+        scheduler::{get_scheduler, init_scheduler},
+    },
+};
 
 mod db;
 mod services;
