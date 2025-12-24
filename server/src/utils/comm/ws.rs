@@ -20,15 +20,14 @@ use crate::utils::{
     error::KohakuError,
 };
 
-/*
-  WebSockert (WS) module for bidirectional Client-Server communication.
-  This is NOT for the general "information" but rather for data flows that require a level of authentication.
-  For example: If a command in discord should update an entry in the database.
-  For general data flow, like e.g. "getting the list of characters for a game", please look at the REST API handlers!
-*/
-
 /// Shared Session
-static CLIENT_SESSION: OnceCell<Arc<RwLock<Option<Session>>>> = OnceCell::new();
+static CLIENT_SESSION: OnceCell<Arc<RwLock<Option<ClientConnection>>>> = OnceCell::new();
+
+/// Complete client connection including session and state
+struct ClientConnection {
+    session: Session,
+    authenticated: bool,
+}
 
 /// RateLimiter for WebSocket messages.
 pub struct RateLimiter {
@@ -61,12 +60,6 @@ impl RateLimiter {
     }
 }
 
-/// Current state of the connection (1:1 Connection)
-struct ConnectionState {
-    rate_limiter: RateLimiter,
-    authenticated: bool,
-}
-
 pub fn init_client_session() {
     CLIENT_SESSION.get_or_init(|| Arc::new(RwLock::new(None)));
 }
@@ -80,6 +73,7 @@ pub async fn send_message(input: MessageType) -> Result<(), KohakuError> {
         .ok_or(KohakuError::InternalServerError(
             "[WS] WebSocket Client not initialized".to_string(),
         ))?;
+    
     let mut session_guard = session_lock.write().await;
 
     let message = WsMessage {
@@ -88,9 +82,9 @@ pub async fn send_message(input: MessageType) -> Result<(), KohakuError> {
         message: input,
     };
 
-    if let Some(session) = session_guard.as_mut() {
+    if let Some(client) = session_guard.as_mut() {
         let signed = sign_message(&message, &config.secret);
-        session
+        client.session
             .text(signed)
             .await
             .map_err(|e| KohakuError::OperationError {
@@ -107,14 +101,12 @@ pub async fn send_message(input: MessageType) -> Result<(), KohakuError> {
 
 /// Close current connection
 async fn close_session() {
-    let session_lock = CLIENT_SESSION
-        .get()
-        .ok_or("Client session not initialized")
-        .unwrap();
-    let mut session_guard = session_lock.write().await;
-    if let Some(session) = session_guard.as_mut() {
-        let sess = session.clone();
-        let _ = sess.close(None).await;
+    if let Some(session_lock) = CLIENT_SESSION.get() {
+        let mut session_guard = session_lock.write().await;
+        if let Some(client) = session_guard.take() {
+            let _ = client.session.close(None).await;
+            info!("[WS] Session closed");
+        }
     }
 }
 
@@ -126,15 +118,36 @@ pub async fn websocket_handler(
     let config = get_config();
     let secret = config.secret.clone();
 
-    let (response, mut session, stream) = actix_ws::handle(&req, stream).map_err(|e| {
+    let (response, session, mut stream) = actix_ws::handle(&req, stream).map_err(|e| {
         KohakuError::InternalServerError(format!("[WS] Error while handling incoming stream: {e}"))
     })?;
-    let state = Arc::new(Mutex::new(ConnectionState {
-        rate_limiter: RateLimiter::new(20, 60),
-        authenticated: false,
-    }));
 
-    // Heartbeat Task
+    // Store the session
+    {
+        let session_lock = CLIENT_SESSION
+            .get()
+            .ok_or(KohakuError::InternalServerError(
+                "[WS] Client session not initialized".to_string(),
+            ))?;
+        let mut session_guard = session_lock.write().await;
+        
+        // Close any existing connection
+        if let Some(old_client) = session_guard.take() {
+            info!("[WS] Closing existing connection");
+            let _ = old_client.session.close(None).await;
+        }
+        
+        // Store new connection
+        *session_guard = Some(ClientConnection {
+            session,
+            authenticated: false,
+        });
+        info!("[WS] New client session stored");
+    }
+
+    let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(20, 60)));
+
+    // Heartbeat Task - runs independently
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_secs(30));
         loop {
@@ -144,55 +157,68 @@ pub async fn websocket_handler(
                 id: uuid::Uuid::new_v4().to_string(),
             };
 
-            if send_message(ping_msg).await.is_err() {
+            if let Err(e) = send_message(ping_msg).await {
+                error!("[WS] Failed to send heartbeat: {}", e);
                 break;
             }
         }
+        info!("[WS] Heartbeat task stopped");
     });
 
-    // Reader Task : Handling incoming messages
+    // Reader Task: Handle incoming messages in actix-rt context (not tokio::spawn)
+    // This allows us to use the non-Send stream
     actix_rt::spawn(async move {
-        let mut stream = stream;
-
         while let Some(Ok(msg)) = stream.next().await {
             match msg {
                 Message::Text(text) => {
-                    // General incoming message
-                    let mut guard = state.lock().await;
                     // Rate limiting
-                    if !guard.rate_limiter.check_and_add() {
-                        error!("[WS] - Rate limit exceeded");
-                        close_session().await;
-                        break;
+                    {
+                        let mut limiter = rate_limiter.lock().await;
+                        if !limiter.check_and_add() {
+                            error!("[WS] - Rate limit exceeded");
+                            close_session().await;
+                            break;
+                        }
                     }
 
                     // Verify and parse message
                     match verify_message(&text, &secret) {
                         Ok(message) => {
                             info!("[WS] - Received valid message: {:?}", message.message);
+                            
                             match message.message {
                                 MessageType::Authorization => {
-                                    // Valid signature -> Set connection to be authenticated
-                                    guard.authenticated = true;
-                                    info!("[WS] - Client authenticated!");
+                                    // Set connection to authenticated
+                                    let session_lock = CLIENT_SESSION.get().unwrap();
+                                    let mut session_guard = session_lock.write().await;
+                                    if let Some(client) = session_guard.as_mut() {
+                                        client.authenticated = true;
+                                        info!("[WS] - Client authenticated!");
+                                    }
                                 }
                                 MessageType::Pong { id } => {
                                     info!("[WS] - Received pong: {}", id);
                                 }
-                                _ => {
-                                    if !guard.authenticated {
-                                        error!(
-                                            "[WS] - Received message from unauthenticated client"
-                                        );
+                                MessageType::Notification { data } => {
+                                    // Check authentication
+                                    let is_authenticated = {
+                                        let session_lock = CLIENT_SESSION.get().unwrap();
+                                        let session_guard = session_lock.read().await;
+                                        session_guard.as_ref().map(|c| c.authenticated).unwrap_or(false)
+                                    };
+                                    
+                                    if !is_authenticated {
+                                        error!("[WS] - Received message from unauthenticated client");
                                         close_session().await;
                                         break;
                                     }
+                                    
                                     // Process message
-                                    if let MessageType::Notification { data } = message.message {
-                                        // TODO: Catch errors
-                                        let _ = process_message(data).await;
+                                    if let Err(e) = process_message(data).await {
+                                        error!("[WS] - Error processing message: {}", e);
                                     }
                                 }
+                                _ => {}
                             }
                         }
                         Err(e) => {
@@ -201,19 +227,26 @@ pub async fn websocket_handler(
                     }
                 }
                 Message::Ping(bytes) => {
-                    // Ping message
                     info!("[WS] - Received ping, sending pong");
-                    let _ = state.lock().await;
-                    let _ = session.pong(&bytes).await;
+                    // Send pong through
+                    let session_lock = CLIENT_SESSION.get().unwrap();
+                    let mut session_guard = session_lock.write().await;
+                    if let Some(client) = session_guard.as_mut() {
+                        let _ = client.session.pong(&bytes).await;
+                    }
                 }
                 Message::Close(_) => {
-                    // Disconnect
                     info!("[WS] - Client disconnect!");
+                    close_session().await;
                     break;
                 }
                 _ => {}
             }
         }
+        
+        // Clean up on exit
+        close_session().await;
+        info!("[WS] Reader task stopped");
     });
 
     Ok(response)
