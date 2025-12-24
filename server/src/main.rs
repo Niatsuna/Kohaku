@@ -2,11 +2,11 @@ use actix_web::{web, App, HttpServer};
 use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 
-use crate::utils::{
+use crate::{db::migrate, utils::{
     comm::ws::{init_client_session, websocket_handler},
     config::{get_config, init_config},
     scheduler::{get_scheduler, init_scheduler},
-};
+}};
 
 mod db;
 mod services;
@@ -28,9 +28,16 @@ async fn main() -> std::io::Result<()> {
         .with_thread_ids(true)
         .pretty()
         .init();
-    info!("Logging initialized! Initializing scheduler ...");
+    info!("Logging initialized!");
+
+    // Setup database
+    info!("Running database migration ...");
+    if let Err(e) = migrate() {
+        error!("{}", e);
+    }
 
     // Start scheduler
+    info!("Setting up scheduler ...");
     if init_scheduler().await.is_err() {
         error!("Couldn't initialize scheduler!");
     } else {
