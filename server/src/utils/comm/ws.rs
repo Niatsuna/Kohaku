@@ -73,7 +73,7 @@ pub async fn send_message(input: MessageType) -> Result<(), KohakuError> {
         .ok_or(KohakuError::InternalServerError(
             "[WS] WebSocket Client not initialized".to_string(),
         ))?;
-    
+
     let mut session_guard = session_lock.write().await;
 
     let message = WsMessage {
@@ -84,7 +84,8 @@ pub async fn send_message(input: MessageType) -> Result<(), KohakuError> {
 
     if let Some(client) = session_guard.as_mut() {
         let signed = sign_message(&message, &config.secret);
-        client.session
+        client
+            .session
             .text(signed)
             .await
             .map_err(|e| KohakuError::OperationError {
@@ -130,13 +131,13 @@ pub async fn websocket_handler(
                 "[WS] Client session not initialized".to_string(),
             ))?;
         let mut session_guard = session_lock.write().await;
-        
+
         // Close any existing connection
         if let Some(old_client) = session_guard.take() {
             info!("[WS] Closing existing connection");
             let _ = old_client.session.close(None).await;
         }
-        
+
         // Store new connection
         *session_guard = Some(ClientConnection {
             session,
@@ -185,7 +186,7 @@ pub async fn websocket_handler(
                     match verify_message(&text, &secret) {
                         Ok(message) => {
                             info!("[WS] - Received valid message: {:?}", message.message);
-                            
+
                             match message.message {
                                 MessageType::Authorization => {
                                     // Set connection to authenticated
@@ -204,15 +205,20 @@ pub async fn websocket_handler(
                                     let is_authenticated = {
                                         let session_lock = CLIENT_SESSION.get().unwrap();
                                         let session_guard = session_lock.read().await;
-                                        session_guard.as_ref().map(|c| c.authenticated).unwrap_or(false)
+                                        session_guard
+                                            .as_ref()
+                                            .map(|c| c.authenticated)
+                                            .unwrap_or(false)
                                     };
-                                    
+
                                     if !is_authenticated {
-                                        error!("[WS] - Received message from unauthenticated client");
+                                        error!(
+                                            "[WS] - Received message from unauthenticated client"
+                                        );
                                         close_session().await;
                                         break;
                                     }
-                                    
+
                                     // Process message
                                     if let Err(e) = process_message(data).await {
                                         error!("[WS] - Error processing message: {}", e);
@@ -243,7 +249,7 @@ pub async fn websocket_handler(
                 _ => {}
             }
         }
-        
+
         // Clean up on exit
         close_session().await;
         info!("[WS] Reader task stopped");

@@ -152,16 +152,18 @@ pub fn subscribe(
 /// - `guild_id_param : Option<i64>` - Optional: Guild Id to looks for.
 ///
 /// Note: At least one argument must be set otherwise a `KohakuError::ValidationError` will be sent.
-/// 
+///
 /// Returns:
 /// Either a list of active subscriptions or a `KohakuError` if a operation failed.
 pub fn get_subscriptions(
     code_param: Option<&str>,
     channel_id_param: Option<i64>,
-    guild_id_param: Option<i64>
+    guild_id_param: Option<i64>,
 ) -> Result<Vec<NotificationTarget>, KohakuError> {
     if code_param.is_none() && channel_id_param.is_none() && guild_id_param.is_none() {
-        return Err(KohakuError::ValidationError("Invalid arguments! At least one argument must be set!".to_string()));
+        return Err(KohakuError::ValidationError(
+            "Invalid arguments! At least one argument must be set!".to_string(),
+        ));
     }
 
     use crate::db::schema::notification_targets::dsl::*;
@@ -217,16 +219,16 @@ pub fn unsubscribe(
 // =================== Notifications =================== //
 /// In bound data to be send to a client per subscription.
 /// This data is used to hold the actual data and is further modified by the format option from `NotificationTarget`.
-/// 
+///
 /// Fields:
 /// - `triggering_event : String` - Identifier how the event was triggered. Mainly for debugging purposes. (Example: `game1-news-scraper`, `github-release`)
 /// - `channel_id : i64` - Identifier for the target channel.
 /// - `guild_id : i64` - Identifier for the target guild.
 /// - `embed : Option<serde_json::Value>` - Embed data. If the client is suppose to post an embed with the actual message.
 /// - `message : Option<String>` - Text Input content. This field is modified by the format option given to each subscription. Please see below at `Message Formatting` for an example and further details.
-/// 
+///
 /// Note: If `embed` and `message` are both empty, nothing will be sent to the client, as empty messages have no purpose.
-/// 
+///
 /// Message Formatting
 /// The field `message` is modified by the data stored in `format` in `NotificationTarget`.
 /// The format can include mentions of roles and guild-available emotes. If the format features a field `{content}` the actual content of message will be substituted in it.
@@ -238,28 +240,33 @@ pub struct NotificationData {
     pub triggering_event: String,
     pub channel_id: i64,
     pub guild_id: i64,
-    pub embed : Option<serde_json::Value>,
-    pub message: Option<String>
+    pub embed: Option<serde_json::Value>,
+    pub message: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct NotificationPayload {
-    pub code : String,
-    pub timestamp : NaiveDateTime,
-    pub data : Vec<NotificationData>
+    pub code: String,
+    pub timestamp: NaiveDateTime,
+    pub data: Vec<NotificationData>,
 }
 
 /// Notifies the client to send data to subscribed channels based on data derived from a triggering event.
-/// 
+///
 /// Arguments:
 /// - `code : &str` - Topic Identifier. Used to look up channels to send to.
 /// - `triggering_event : &str` - Event identifier. Mainly for debugging purposes.
 /// - `embed : Option<serde_json::Value>` - Embed data.
 /// - `message : Option<String>` - Text content. This field gets modified by the subscriptions format field. Please see `NotificationData` for more details`
-pub async fn notify(code : &str, triggering_event: &str, embed: Option<serde_json::Value>, message: Option<String>) -> Result<(), KohakuError> {
+pub async fn notify(
+    code: &str,
+    triggering_event: &str,
+    embed: Option<serde_json::Value>,
+    message: Option<String>,
+) -> Result<(), KohakuError> {
     // Get all applicable subscriptions
     let subscriptions = get_subscriptions(Some(code), None, None)?;
-    let mut target_data : Vec<NotificationData> = Vec::new();
+    let mut target_data: Vec<NotificationData> = Vec::new();
 
     // Convert
     for target in subscriptions {
@@ -272,27 +279,26 @@ pub async fn notify(code : &str, triggering_event: &str, embed: Option<serde_jso
                 (Some(fmt), Some(m)) => Some(fmt.replace("{message}", &m)),
                 (Some(fmt), None) => Some(fmt),
                 (None, Some(m)) => Some(m),
-                (None, None) => None
+                (None, None) => None,
             };
 
             let data = NotificationData {
-                triggering_event : triggering_event.to_string(),
-                channel_id : target.channel_id,
-                guild_id : target.guild_id,
+                triggering_event: triggering_event.to_string(),
+                channel_id: target.channel_id,
+                guild_id: target.guild_id,
                 embed,
-                message : msg
+                message: msg,
             };
 
             target_data.push(data);
-
         }
     }
 
     // Construct Payload
     let payload = NotificationPayload {
-        code : code.to_string(),
-        timestamp : Utc::now().naive_utc(),
-        data : target_data
+        code: code.to_string(),
+        timestamp: Utc::now().naive_utc(),
+        data: target_data,
     };
     // Send
     notify_client(payload).await

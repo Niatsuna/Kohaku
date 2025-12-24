@@ -50,7 +50,7 @@ class KohakuHelpCommand(commands.HelpCommand):
         if category is None:
             return self.get_command_category(command.parent)
         return category
-    
+
     def get_group_title(self, command):
         """
         Get group title for display purposes.
@@ -61,7 +61,7 @@ class KohakuHelpCommand(commands.HelpCommand):
             # Top-Level
             if isinstance(command, commands.Group):
                 # Is Group: Get title
-                return self.get_decorator_var(command, 'title', default=command.name)
+                return self.get_decorator_var(command, "title", default=command.name)
             # Is not a group!
             return None
         return self.get_group_title(command.parent)
