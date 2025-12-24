@@ -34,6 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLIENT_TOKEN: Lorem_ipsum
+      CLIENT_PREFIX: Lorem_ipsum
+      SERVER_ADDR: Lorem_ipsum
+      SERVER_PORT: 5000
+      SECRET: Lorem_ipsum
     
     steps:
     - uses: actions/checkout@v4
