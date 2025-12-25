@@ -82,9 +82,9 @@ pub fn get_code(code_param: String) -> Result<NotificationCode, KohakuError> {
         notification_codes::code.eq(code_param),
     );
 
-    Ok(query
+    query
         .first::<NotificationCode>(&mut conn)
-        .map_err(KohakuError::DatabaseError)?)
+        .map_err(KohakuError::DatabaseError)
 }
 
 /// Returns a vector with all available registred codes.
