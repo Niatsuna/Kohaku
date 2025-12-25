@@ -68,6 +68,20 @@ pub fn update_code_ts(code: &str) -> Result<NotificationCode, KohakuError> {
         .map_err(KohakuError::DatabaseError)
 }
 
+/// Returns data of a single given code
+/// 
+/// Arguments:
+/// - `code : String` - Identifier for topic
+/// 
+/// Returns:
+/// - `NotificationCode` or a `KohakuError` if the operation failed.
+pub fn get_code(code_param: String) -> Result<NotificationCode, KohakuError> {
+    let mut conn = get_connection()?;
+    let query = FilterDsl::filter(notification_codes::table, notification_codes::code.eq(code_param));
+
+    Ok(query.first::<NotificationCode>(&mut conn).map_err(KohakuError::DatabaseError)?)
+}
+
 /// Returns a vector with all available registred codes.
 pub fn get_all_codes() -> Result<Vec<NotificationCode>, KohakuError> {
     let mut conn = get_connection()?;
@@ -80,7 +94,7 @@ pub fn get_all_codes() -> Result<Vec<NotificationCode>, KohakuError> {
 /// This will also remove any notifaction targets (subscriptions) for that code to ensure data consistency.
 ///
 /// Arguments:
-/// - `code : String` - Indentifer for topic.
+/// - `code : String` - Identifer for topic.
 pub fn unregister(code: String) -> Result<(), KohakuError> {
     let mut conn = get_connection()?;
 
@@ -156,7 +170,7 @@ pub fn subscribe(
 /// Returns:
 /// Either a list of active subscriptions or a `KohakuError` if a operation failed.
 pub fn get_subscriptions(
-    code_param: Option<&str>,
+    code_param: Option<String>,
     channel_id_param: Option<i64>,
     guild_id_param: Option<i64>,
 ) -> Result<Vec<NotificationTarget>, KohakuError> {
@@ -265,7 +279,7 @@ pub async fn notify(
     message: Option<String>,
 ) -> Result<(), KohakuError> {
     // Get all applicable subscriptions
-    let subscriptions = get_subscriptions(Some(code), None, None)?;
+    let subscriptions = get_subscriptions(Some(code.to_string()), None, None)?;
     let mut target_data: Vec<NotificationData> = Vec::new();
 
     // Convert
