@@ -12,7 +12,6 @@ use crate::{
 };
 
 mod db;
-mod services;
 mod utils;
 
 #[actix_web::main]

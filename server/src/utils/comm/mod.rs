@@ -5,6 +5,7 @@ use tracing::info;
 use crate::utils::{comm::ws::send_message, error::KohakuError};
 
 pub mod auth;
+pub mod notifications;
 pub mod ws;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
