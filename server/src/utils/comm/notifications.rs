@@ -18,7 +18,7 @@ use crate::{
 /// - `code : String` - Identifier to subscribe to.
 /// - `last_used : NaiveDateTime` - Timestamp of last received data (UTC), if no data was sent it is the timestamp of creation.
 /// - `description : Option<String>` - Optional description to describe what can be subscribed to.
-#[derive(Queryable, Identifiable, Selectable, AsChangeset, Insertable)]
+#[derive(Queryable, Identifiable, Selectable, AsChangeset, Insertable, Serialize)]
 #[diesel(table_name = crate::db::schema::notification_codes)]
 #[diesel(primary_key(code))]
 pub struct NotificationCode {
@@ -69,17 +69,22 @@ pub fn update_code_ts(code: &str) -> Result<NotificationCode, KohakuError> {
 }
 
 /// Returns data of a single given code
-/// 
+///
 /// Arguments:
 /// - `code : String` - Identifier for topic
-/// 
+///
 /// Returns:
 /// - `NotificationCode` or a `KohakuError` if the operation failed.
 pub fn get_code(code_param: String) -> Result<NotificationCode, KohakuError> {
     let mut conn = get_connection()?;
-    let query = FilterDsl::filter(notification_codes::table, notification_codes::code.eq(code_param));
+    let query = FilterDsl::filter(
+        notification_codes::table,
+        notification_codes::code.eq(code_param),
+    );
 
-    Ok(query.first::<NotificationCode>(&mut conn).map_err(KohakuError::DatabaseError)?)
+    Ok(query
+        .first::<NotificationCode>(&mut conn)
+        .map_err(KohakuError::DatabaseError)?)
 }
 
 /// Returns a vector with all available registred codes.
