@@ -17,11 +17,12 @@ services:
     depends_on:
       - postgres
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PWD}@postgres/kohaku
+      - BOOTSTRAP_KEY=${BOOTSTRAP_KEY}
+      - SERVER_LOGGING_LEVEL=${SERVER_LOGGING_LEVEL}
       - SERVER_ADDR=localhost
       - SERVER_PORT=${SERVER_PORT}
-      - SERVER_LOGGING_LEVEL=${SERVER_LOGGING_LEVEL}
-      - SECRET=${SECRET}
+      - SERVER_ENCRYPTION_KEY=${SERVER_ENCRYPTION_KEY}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PWD}@postgres/kohaku
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}"
 
@@ -31,15 +32,11 @@ services:
     depends_on:
       - kohaku-server
     environment:
-      - CLIENT_TOKEN=${CLIENT_TOKEN}
-      - CLIENT_ADDR=localhost
-      - CLIENT_PORT=${CLIENT_PORT}
-      - CLIENT_LOGGING_LEVEL=${CLIENT_LOGGING_LEVEL}
-      - CLIENT_PREFIX=${CLIENT_PREFIX}
+      - OWNER_ID=${OWNER_ID}
       - SERVER_ADDR=kohaku-server
       - SERVER_PORT=${SERVER_PORT}
-      - SECRET=${SECRET}
-    ports:
-      - "${CLIENT_PORT}:${CLIENT_PORT}"
+      - CLIENT_LOGGING_LEVEL=${CLIENT_LOGGING_LEVEL}
+      - CLIENT_PREFIX=${CLIENT_PREFIX}
+      - CLIENT_TOKEN=${CLIENT_TOKEN}
 volumes:
   kohaku-database:
