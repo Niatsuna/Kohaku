@@ -148,3 +148,44 @@ pub async fn delete_apikey(
         .map_err(KohakuError::DatabaseError)?;
     Ok(())
 }
+
+// =========================================== JWT ============================================= //
+
+/// JsonWebToken Type
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum TokenType {
+    // Key management JWT
+    Bootstrap,
+    // Short-lived (15 min)
+    Access,
+    // Long-lived (30 days)
+    Refresh,
+}
+
+/// JsonWebToken Claim
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Claims {
+    /// Identifier which service / user uses this key
+    pub owner: String,
+    /// Id of corresponding [struct@ApiKey]
+    pub key_id: i32,
+    /// Scopes (same as [struct@ApiKey])
+    pub scopes: Vec<String>,
+    /// Bootstrap, Access or Refresh
+    pub token_type: TokenType,
+    /// Expiration Timestamp
+    pub exp: NaiveDateTime,
+    /// Issued-at Timestamp
+    pub iat: NaiveDateTime,
+}
+
+/// Response of creating a (pair of) token(s) 
+#[derive(Debug, Serialize)]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub token_type: String,
+    /// Expiration in seconds
+    pub expires_in: usize,
+}
