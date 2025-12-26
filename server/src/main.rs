@@ -5,7 +5,6 @@ use tracing_subscriber::FmtSubscriber;
 use crate::{
     db::migrate,
     utils::{
-        comm::ws::{init_client_session, websocket_handler},
         config::{get_config, init_config},
         scheduler::{get_scheduler, init_scheduler},
     },
@@ -52,10 +51,12 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Start websocket
-    init_client_session();
+    // TODO:
 
-    HttpServer::new(|| App::new().route("/ws", web::get().to(websocket_handler)))
-        .bind((config.server_addr.clone(), config.server_port))?
-        .run()
-        .await
+    HttpServer::new(
+        || App::new(), /*.route("/ws", web::get().to(websocket_handler))*/
+    )
+    .bind((config.server_addr.clone(), config.server_port))?
+    .run()
+    .await
 }
