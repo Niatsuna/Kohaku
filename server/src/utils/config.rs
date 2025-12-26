@@ -27,8 +27,9 @@ pub struct Config {
     // Database
     pub database_url: String,
 
-    // Client-communication
-    pub secret: Vec<u8>,
+    // Communication
+    pub bootstrap_key: String,
+    pub encryption_key: Vec<u8>,
 }
 
 impl Config {
@@ -44,7 +45,8 @@ impl Config {
             ))
             .unwrap(),
             database_url: read_env("DATABASE_URL", None),
-            secret: read_env("SECRET", None).into_bytes(),
+            bootstrap_key: read_env("BOOTSTRAP_KEY", None),
+            encryption_key: read_env("SERVER_ENCRYPTION_KEY", None).into_bytes(),
         }
     }
 }
