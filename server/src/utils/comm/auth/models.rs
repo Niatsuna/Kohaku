@@ -180,7 +180,7 @@ pub struct Claims {
     pub iat: NaiveDateTime,
 }
 
-/// Response of creating a (pair of) token(s) 
+/// Response of creating a (pair of) token(s)
 #[derive(Debug, Serialize)]
 pub struct TokenResponse {
     pub access_token: String,
