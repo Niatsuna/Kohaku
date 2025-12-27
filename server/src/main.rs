@@ -5,6 +5,7 @@ use tracing_subscriber::FmtSubscriber;
 use crate::{
     db::migrate,
     utils::{
+        comm::auth::{configure_auth_routes, jwt::init_jwtservice},
         config::{get_config, init_config},
         scheduler::{get_scheduler, init_scheduler},
     },
@@ -50,12 +51,22 @@ async fn main() -> std::io::Result<()> {
         info!("Scheduler started!");
     }
 
+    // Start JWT Service
+    info!("Setting up JWTService ...");
+    if init_jwtservice(&config.encryption_key).is_ok() {
+        info!("JWTService started!");
+    } else {
+        error!("Couldn't initialize JWTService! Protected endpoints will return an error!");
+    }
+
     // Start websocket
     // TODO:
 
-    HttpServer::new(
-        || App::new(), /*.route("/ws", web::get().to(websocket_handler))*/
-    )
+    HttpServer::new(|| {
+        App::new().service(
+            web::scope("/api").service(web::scope("/auth").configure(configure_auth_routes)),
+        )
+    })
     .bind((config.server_addr.clone(), config.server_port))?
     .run()
     .await
