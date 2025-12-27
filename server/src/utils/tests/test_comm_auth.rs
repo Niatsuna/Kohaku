@@ -1,9 +1,15 @@
+use chrono::{Duration, NaiveDateTime, Utc};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use rand::Rng;
 use regex::Regex;
 
-use crate::utils::comm::auth::api_key::{
-    extract_prefix, generate_key, hash_key, random_string, verify_key, CHARSET,
+use crate::utils::comm::auth::{
+    api_key::{extract_prefix, generate_key, hash_key, random_string, verify_key, CHARSET},
+    jwt::JWTService,
+    models::Claims,
 };
+
+// ========================================= API Keys ========================================== //
 
 #[test]
 pub fn test_apikey_generate_key() {
@@ -133,4 +139,146 @@ pub fn test_apikey_extract_prefix() {
     let ext_prefix = extract_prefix(&key);
 
     assert_eq!(prefix, ext_prefix, "Extracted prefix is not identical to generated prefix of same key. Extracted = {}, Generated = {}", ext_prefix, prefix);
+}
+
+// =========================================== JWT ============================================= //
+fn setup_service() -> (JWTService, EncodingKey, DecodingKey) {
+    // Generate a random encryption key
+    let s = random_string(100);
+    let key: &[u8] = s.as_bytes();
+
+    let encoding_key = EncodingKey::from_secret(key);
+    let decoding_key = DecodingKey::from_secret(key);
+
+    let service = JWTService::new(key);
+
+    (service, encoding_key, decoding_key)
+}
+
+#[test]
+pub fn test_jwt_create_bootstrap_token() {
+    let (service, encoding_key, decoding_key) = setup_service();
+
+    let now = Utc::now().timestamp() as usize;
+    let exp = now + 10 * 60;
+    let token = service.create_bootstrap_token();
+    assert!(token.is_ok());
+
+    // Check if decoding results in predefined claim
+    let t = token.unwrap();
+    let t2 = t.clone();
+    let validation = Validation::default();
+    let claims = decode::<Claims>(t, &decoding_key, &validation);
+
+    assert!(claims.is_ok());
+    let cl = claims.unwrap().claims;
+    assert_eq!(cl.owner, "system".to_string());
+    assert_eq!(cl.key_id, -1);
+    assert_eq!(cl.scopes, vec!["keys:manage".to_string()]);
+    // now < iat, exp < cl.exp
+    assert!(cl.iat - now <= 1);
+    assert!(cl.exp - exp <= 1);
+
+    // Check if encoding the same claim with the same key gets the same token
+    let tkn = encode(&Header::default(), &cl, &encoding_key);
+    assert!(tkn.is_ok());
+    assert_eq!(tkn.unwrap(), t2);
+}
+
+#[test]
+pub fn test_jwt_create_tokens() {
+    let (service, encoding_key, decoding_key) = setup_service();
+
+    let id = 0;
+    let owner = "test-suite";
+    let scopes = vec!["test:test".to_string()];
+    let scopes_ = scopes.clone();
+
+    let now = Utc::now().timestamp() as usize;
+
+    let tokens = service.create_tokens(id, &owner, scopes);
+    assert!(tokens.is_ok());
+    let tokens_ = tokens.unwrap().clone();
+
+    // Check if decoding results in predefined claim
+    let access_token = tokens_.access_token;
+    let at2 = access_token.clone();
+    let refresh_token = tokens_.refresh_token.unwrap();
+    let rf2 = refresh_token.clone();
+    let validation = Validation::default();
+
+    let at_claims = decode(access_token, &decoding_key, &validation);
+    assert!(at_claims.is_ok());
+    let at_claim: Claims = at_claims.unwrap().claims;
+    assert_eq!(at_claim.owner, owner.to_string());
+    assert_eq!(at_claim.key_id, id);
+    assert_eq!(at_claim.scopes, scopes_);
+
+    // + 15 min
+    let exp = now + 15 * 60;
+    assert!(at_claim.iat - now <= 1);
+    assert!(at_claim.exp - exp <= 1);
+
+    let rf_claims = decode(refresh_token, &decoding_key, &validation);
+    assert!(rf_claims.is_ok());
+    let rf_claim: Claims = rf_claims.unwrap().claims;
+    assert_eq!(rf_claim.owner, owner.to_string());
+    assert_eq!(rf_claim.key_id, id);
+    assert_eq!(rf_claim.scopes, scopes_);
+
+    // + 30 days
+    let exp = now + 30 * 24 * 60 * 60;
+    assert!(rf_claim.iat - now <= 1);
+    assert!(rf_claim.exp - exp <= 1);
+
+    // Check if encoding the same claim with same key gets the same token
+    let at_tkn = encode(&Header::default(), &at_claim, &encoding_key);
+    assert!(at_tkn.is_ok());
+    assert_eq!(at_tkn.unwrap(), at2);
+
+    let rf_tkn = encode(&Header::default(), &rf_claim, &encoding_key);
+    assert!(rf_tkn.is_ok());
+    assert_eq!(rf_tkn.unwrap(), rf2);
+}
+
+#[test]
+pub fn test_jwt_validate_token() {
+    let (service, _, _) = setup_service();
+    let id = 0;
+    let owner = "test-suite";
+    let scopes = vec!["test:test".to_string()];
+    let scopes_ = scopes.clone();
+
+    let tokens = service.create_tokens(id, owner, scopes);
+    assert!(
+        tokens.is_ok(),
+        "Token creation failed: {}",
+        tokens.err().unwrap()
+    );
+    let tokens_ = tokens.unwrap().clone();
+
+    let access_token = &tokens_.access_token;
+    let refresh_token = &tokens_.refresh_token.unwrap();
+
+    let val = service.validate_token(&access_token);
+    assert!(
+        val.is_ok(),
+        "Validation for access token failed: {}",
+        val.err().unwrap()
+    );
+    let cl = val.unwrap();
+    assert_eq!(cl.key_id, id);
+    assert_eq!(cl.owner, owner);
+    assert_eq!(cl.scopes, scopes_);
+
+    let val = service.validate_token(&refresh_token);
+    assert!(
+        val.is_ok(),
+        "Validation for refresh token failed: {}",
+        val.err().unwrap()
+    );
+    let cl = val.unwrap();
+    assert_eq!(cl.key_id, id);
+    assert_eq!(cl.owner, owner);
+    assert_eq!(cl.scopes, scopes_);
 }

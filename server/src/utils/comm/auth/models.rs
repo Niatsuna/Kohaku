@@ -175,13 +175,13 @@ pub struct Claims {
     /// Bootstrap, Access or Refresh
     pub token_type: TokenType,
     /// Expiration Timestamp
-    pub exp: NaiveDateTime,
+    pub exp: usize,
     /// Issued-at Timestamp
-    pub iat: NaiveDateTime,
+    pub iat: usize,
 }
 
 /// Response of creating a (pair of) token(s)
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct TokenResponse {
     pub access_token: String,
     pub refresh_token: Option<String>,
