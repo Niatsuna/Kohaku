@@ -10,7 +10,7 @@ fn setup_env_vars(only_required: bool) {
 
     env::set_var("DATABASE_URL", "some_url/db");
     env::set_var("BOOTSTRAP_KEY", "secret1");
-    env::set_var("ENCRYPTION_KEY", "secret2");
+    env::set_var("SERVER_ENCRYPTION_KEY", "secret2");
     if !only_required {
         // Skip these that are not required to not panic Config::new()
         env::set_var("SERVER_ADDR", "localhost");
