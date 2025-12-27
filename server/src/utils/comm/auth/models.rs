@@ -10,6 +10,30 @@ use crate::{
     utils::error::KohakuError,
 };
 
+// =========================================== API ============================================= //
+
+#[derive(Debug, Deserialize)]
+pub struct CreateKeyRequest {
+    pub owner: String,
+    pub scopes: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateKeyResponse {
+    pub api_key: String,
+    pub scopes: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RefreshRequest {
+    pub refresh_token: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RevokeRequest {
+    pub full_key: String,
+}
+
 // ========================================= API Keys ========================================== //
 
 /// Representation of database entry of a given ApiKey
@@ -82,18 +106,19 @@ pub async fn create_apikey(
 
 /// Gets an entry for an identifieable API key in the database
 ///
+/// `id` will be one either 0 or 1 entry, while `key_prefix` is not unique and therefore can result in n entries.
 /// # Parameters
 /// - `id_` : Serial primary key of the database. Either this or `key_prefix` must be set
 /// - `key_prefix_` : 10-char long [`String`] prefix of the actual full key. Either this or `id` must be set
 ///
 /// # Returns
 /// A [`Result`] which is either
-/// - [`Ok`] : The identified [struct@ApiKey] that matches either `id` and/or `key_prefix`
+/// - [`Ok`] : The identified [struct@ApiKey]s that matches either `id` and/or `key_prefix` inside a vector
 /// - [`Err`] : A [enum@KohakuError] based on the failing operation
 pub async fn get_apikey(
     id_: Option<i32>,
     key_prefix_: Option<String>,
-) -> Result<ApiKey, KohakuError> {
+) -> Result<Vec<ApiKey>, KohakuError> {
     use db::schema::api_keys::dsl::*;
     if id_.is_none() && key_prefix_.is_none() {
         return Err(KohakuError::ValidationError("Illegal Argument: At least one of the parameters - `id` and/or `key_prefix` must be set!".to_string()));
@@ -109,9 +134,7 @@ pub async fn get_apikey(
         query = FilterDsl::filter(query, key_prefix.eq(kp));
     }
 
-    query
-        .get_result(&mut conn)
-        .map_err(KohakuError::DatabaseError)
+    query.load(&mut conn).map_err(KohakuError::DatabaseError)
 }
 
 /// Removes an entry representing an API key from the database
