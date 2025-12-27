@@ -21,10 +21,23 @@ pub mod api_key;
 pub mod jwt;
 pub mod models;
 
+/// Configures server so that requests get routed to the correct functions
 pub fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/login", web::post().to(login));
 }
 
+/// API Key login endpoint.
+///
+/// # Parameters
+/// - `req` : [`HttpRequest`] body to hold the `X-API-Key` value.
+///
+/// # Returns
+/// A [`Result`] which either is
+/// - [`Ok`] : A [`HttpResponse`] with status `200` which holds the [`TokenResponse`]
+/// - [`Err`] : A [`KohakuError`] based on failed operations. The [`KohakuError`] gets automatically converted to a [`HttpResponse`]
+///
+/// # Errors
+/// Please see [`KohakuError::details`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
 async fn login(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
     let api_key = req
         .headers()
