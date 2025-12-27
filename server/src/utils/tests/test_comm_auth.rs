@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use rand::Rng;
@@ -5,7 +7,7 @@ use regex::Regex;
 
 use crate::utils::comm::auth::{
     api_key::{extract_prefix, generate_key, hash_key, random_string, verify_key, CHARSET},
-    jwt::JWTService,
+    jwt::{get_jwtservice, init_jwtservice, JWTService},
     models::Claims,
 };
 
@@ -281,4 +283,26 @@ pub fn test_jwt_validate_token() {
     assert_eq!(cl.key_id, id);
     assert_eq!(cl.owner, owner);
     assert_eq!(cl.scopes, scopes_);
+}
+
+#[test]
+fn test_jwt_service_not_initialized_before_get() {
+    assert!(get_jwtservice().is_err())
+}
+
+#[test]
+fn test_jwt_service_singleton() {
+    let s = random_string(100);
+    let key = s.as_bytes();
+
+    // #1 Test that first intialization succeeds and second fails
+    assert!(init_jwtservice(key).is_ok());
+    assert!(init_jwtservice(key).is_err());
+
+    // #2 Test if getter returns same instance
+    let s1 = get_jwtservice();
+    let s2 = get_jwtservice();
+    assert!(s1.is_ok());
+    assert!(s2.is_ok());
+    assert!(Arc::ptr_eq(&s1.unwrap(), &s2.unwrap()));
 }

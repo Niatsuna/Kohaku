@@ -1,7 +1,7 @@
 use chrono::{Duration, NaiveDateTime, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use std::collections::HashMap;
-use tokio::sync::RwLock;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{OnceCell, RwLock};
 
 #[allow(unused_imports)] // ApiKey is linked in the documentation
 use crate::utils::{
@@ -9,6 +9,8 @@ use crate::utils::{
     config::get_config,
     error::KohakuError,
 };
+
+static JWT_SERVICE: OnceCell<Arc<JWTService>> = OnceCell::const_new();
 
 /// JsonWebToken Service for generating, verifying and managing JWTs
 pub struct JWTService {
@@ -162,4 +164,37 @@ impl JWTService {
 
         blklist.retain(|_, &mut expiry| expiry >= now);
     }
+}
+
+/// Initializes a globally unqiue and accessible [`JWTService`] instance.
+///
+/// # Parameters
+/// - `encryption_key` : A [`String`]-based key for JWT encryption. Can be found in the configuration and is loaded as a env
+///
+/// # Returns
+/// A [`Result`] which is either
+/// - [`Ok`] : [`JWTService`] is now accessible via [get_jwtservice]
+/// - [`Err`] : A [KohakuError::InternalServerError] if the [`JWTService`] is already initialized
+pub fn init_jwtservice(encryption_key: &[u8]) -> Result<(), KohakuError> {
+    let service = Arc::new(JWTService::new(encryption_key));
+    JWT_SERVICE.set(service).map_err(|_| {
+        KohakuError::InternalServerError("JWTService already initialized".to_string())
+    })?;
+    Ok(())
+}
+
+/// Get current [`JWTService`] instance.
+///
+/// # Returns
+/// A [`Result`] which is either
+/// - [`Ok`] : A [`Arc<JWTService>`] to gain access to the functionalities of the [`JWTService`]
+/// - [`Err`] : A [KohakuError::InternalServerError] if the [`JWTService`] was not prior initialized via [`init_jwtservice`]
+pub fn get_jwtservice() -> Result<Arc<JWTService>, KohakuError> {
+    let service = JWT_SERVICE.get();
+    if service.is_none() {
+        return Err(KohakuError::InternalServerError(
+            "JWTService not initialized - call init_jwtservice first!".to_string(),
+        ));
+    }
+    Ok(service.unwrap().clone())
 }
