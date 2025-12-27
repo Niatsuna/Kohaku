@@ -14,7 +14,7 @@ use crate::utils::comm::auth::{
 // ========================================= API Keys ========================================== //
 
 #[test]
-pub fn test_apikey_generate_key() {
+fn test_apikey_generate_key() {
     let (full_key, prefix) = generate_key();
 
     assert_eq!(
@@ -47,7 +47,7 @@ pub fn test_apikey_generate_key() {
 }
 
 #[test]
-pub fn test_apikey_random_string() {
+fn test_apikey_random_string() {
     let mut rng = rand::rng();
     let len1 = rng.random_range(2..100);
     let len2 = rng.random_range(2..100);
@@ -105,7 +105,7 @@ pub fn test_apikey_random_string() {
 }
 
 #[test]
-pub fn test_apikey_verify_key() {
+fn test_apikey_verify_key() {
     let (key, _) = generate_key();
     let hash = hash_key(&key);
     assert!(hash.is_ok(), "Hash generation failed! [#1]");
@@ -136,7 +136,7 @@ pub fn test_apikey_verify_key() {
 }
 
 #[test]
-pub fn test_apikey_extract_prefix() {
+fn test_apikey_extract_prefix() {
     let (key, prefix) = generate_key();
     let ext_prefix = extract_prefix(&key);
 
@@ -158,7 +158,7 @@ fn setup_service() -> (JWTService, EncodingKey, DecodingKey) {
 }
 
 #[test]
-pub fn test_jwt_create_bootstrap_token() {
+fn test_jwt_create_bootstrap_token() {
     let (service, encoding_key, decoding_key) = setup_service();
 
     let now = Utc::now().timestamp() as usize;
@@ -188,7 +188,7 @@ pub fn test_jwt_create_bootstrap_token() {
 }
 
 #[test]
-pub fn test_jwt_create_tokens() {
+fn test_jwt_create_tokens() {
     let (service, encoding_key, decoding_key) = setup_service();
 
     let id = 0;
@@ -244,7 +244,7 @@ pub fn test_jwt_create_tokens() {
 }
 
 #[test]
-pub fn test_jwt_validate_token() {
+fn test_jwt_validate_token() {
     let (service, _, _) = setup_service();
     let id = 0;
     let owner = "test-suite";
