@@ -29,30 +29,79 @@ impl JWTService {
         }
     }
 
-    /// Creates JWT for the bootstrap key.
+    /// Create one token for the given API key and scopes.
+    ///
+    /// Bootstrap and access tokens are short-lived with 10 and 15 minutes respectively.
+    /// Refresh tokens live for 30 days.
+    ///
+    /// # Parameters
+    /// - `owner` : [`String`] based identifier which service / user uses this key
+    /// - `key_id`: Identifier of API key in the database
+    /// - `scopes`: [`String`] based vector that grants permissions in a `category:verb` manner
+    ///
+    /// # Returns
+    /// A [`Result`] which is either
+    /// - [`Ok`] : A [`String`] representation of the token
+    /// - [`Err`] : A [`KohakuError`] if some operation fails or the input is invalid
+    pub fn create_token(
+        &self,
+        owner: String,
+        key_id: i32,
+        scopes: Vec<String>,
+        token_type: TokenType,
+    ) -> Result<String, KohakuError> {
+        let management_scope = scopes.contains(&"key:manage".to_string());
+        let is_bootstrap = token_type == TokenType::Bootstrap;
+
+        // Check if given Arguments are valid (`keys:manage` exlcusively and uniquely for bootstrap key)
+        if management_scope && !is_bootstrap {
+            return Err(KohakuError::Unauthorized("No general tokens with the scope `keys:manage` can be created! Please refer to the bootstrap key!".to_string()));
+        } else if !management_scope && is_bootstrap {
+            return Err(KohakuError::Unauthorized(
+                "Bootstrap Key must have `keys:manage` and no other permission scopes!".to_string(),
+            ));
+        }
+
+        // Create claim
+        let now = Utc::now().timestamp() as usize;
+        let duration = match token_type {
+            TokenType::Bootstrap => 10 * 60,         // 10 Minutes
+            TokenType::Access => 15 * 60,            // 15 Minutes
+            TokenType::Refresh => 30 * 24 * 60 * 60, // 30 days
+        };
+
+        let claims = Claims {
+            owner,
+            key_id,
+            scopes: scopes.clone(),
+            token_type,
+            exp: now + duration,
+            iat: now,
+        };
+
+        // Create token
+        encode(&Header::default(), &claims, &self.encoding_key)
+            .map_err(|e| KohakuError::InternalServerError(e.to_string()))
+    }
+
+    /// Helper function to generate the bootstrap token. Calls [`JWTService::create_token`].
+    ///
+    /// Bootstrap token lives for 10 minutes.
     ///
     /// # Returns
     /// A [`Result`] which is either
     /// - [`Ok`] : [`String`] representation of JWT [`Claims`]
     /// - [`Err`]: A [KohakuError::ValidationError] when the encoding fails
     pub fn create_bootstrap_token(&self) -> Result<String, KohakuError> {
-        let now = Utc::now().timestamp() as usize;
-        let exp = now + 10 * 60;
+        let owner = "system".to_string();
+        let key_id = -1;
+        let scopes = vec!["keys:manage".to_string()];
+        let token_type = TokenType::Bootstrap;
 
-        let claims = Claims {
-            owner: "system".to_lowercase().to_string(),
-            key_id: -1,
-            scopes: vec!["keys:manage".to_string()],
-            token_type: TokenType::Bootstrap,
-            exp,
-            iat: now,
-        };
-
-        encode(&Header::default(), &claims, &self.encoding_key)
-            .map_err(|e| KohakuError::ValidationError(e.to_string()))
+        self.create_token(owner, key_id, scopes, token_type)
     }
 
-    /// Creates JWT for general API keys.
+    /// Helper function to generate both, access and refresh token, at once. Calls [`JWTService::create_token`].
     ///
     /// Access tokens are short-lived with only 15 minutes, while refresh tokens are valid up until 30 days.
     ///
@@ -72,36 +121,14 @@ impl JWTService {
         owner: &str,
         scopes: Vec<String>,
     ) -> Result<TokenResponse, KohakuError> {
-        if scopes.contains(&"key:manage".to_string()) {
-            return Err(KohakuError::Unauthorized("No general tokens with the scope `keys:manage` can be created! Please refer to the bootstrap key!".to_string()));
-        }
-        let now = Utc::now().timestamp() as usize;
-
-        // Access Token (15 min)
-        let access_exp = now + 15 * 60;
-        let access_claims = Claims {
-            owner: owner.to_string(),
+        let access_token =
+            self.create_token(owner.to_string(), key_id, scopes.clone(), TokenType::Access)?;
+        let refresh_token = self.create_token(
+            owner.to_string(),
             key_id,
-            scopes: scopes.clone(),
-            token_type: TokenType::Access,
-            exp: access_exp,
-            iat: now,
-        };
-        let access_token = encode(&Header::default(), &access_claims, &self.encoding_key)
-            .map_err(|e| KohakuError::InternalServerError(e.to_string()))?;
-
-        // Refresh Token (30 days)
-        let refresh_exp = now + 30 * 24 * 60 * 60;
-        let refresh_claims = Claims {
-            owner: owner.to_string(),
-            key_id,
-            scopes: scopes.clone(),
-            token_type: TokenType::Refresh,
-            exp: refresh_exp,
-            iat: now,
-        };
-        let refresh_token = encode(&Header::default(), &refresh_claims, &self.encoding_key)
-            .map_err(|e| KohakuError::InternalServerError(e.to_string()))?;
+            scopes.clone(),
+            TokenType::Refresh,
+        )?;
 
         Ok(TokenResponse {
             access_token,
