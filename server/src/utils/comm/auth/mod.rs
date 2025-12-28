@@ -98,13 +98,7 @@ async fn login(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
     // Check if bootstrap_key
     if api_key == config.bootstrap_key {
         // Return bootstrap JWTs
-        let token = service.create_bootstrap_token()?;
-        let response = TokenResponse {
-            access_token: token,
-            refresh_token: None,
-            token_type: "Bearer".to_string(),
-            expires_in: 600, //10 minutes
-        };
+        let response = service.create_bootstrap_token()?;
         return Ok(HttpResponse::Ok().json(response));
     }
     // Check if API Key can be found in database

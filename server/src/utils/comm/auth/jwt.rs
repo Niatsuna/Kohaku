@@ -56,7 +56,7 @@ impl JWTService {
         // Check if given Arguments are valid (`keys:manage` exlcusively and uniquely for bootstrap key)
         if management_scope && !is_bootstrap {
             return Err(KohakuError::Unauthorized("No general tokens with the scope `keys:manage` can be created! Please refer to the bootstrap key!".to_string()));
-        } else if !management_scope && is_bootstrap {
+        } else if (!management_scope || scopes.len() > 1) && is_bootstrap {
             return Err(KohakuError::Unauthorized(
                 "Bootstrap Key must have `keys:manage` and no other permission scopes!".to_string(),
             ));
@@ -90,15 +90,16 @@ impl JWTService {
     ///
     /// # Returns
     /// A [`Result`] which is either
-    /// - [`Ok`] : [`String`] representation of JWT [`Claims`]
+    /// - [`Ok`] : [`TokenResponse`] holding the token in the [`TokenResponse::access_token`] field
     /// - [`Err`]: A [KohakuError::ValidationError] when the encoding fails
-    pub fn create_bootstrap_token(&self) -> Result<String, KohakuError> {
+    pub fn create_bootstrap_token(&self) -> Result<TokenResponse, KohakuError> {
         let owner = "system".to_string();
         let key_id = -1;
         let scopes = vec!["keys:manage".to_string()];
         let token_type = TokenType::Bootstrap;
 
-        self.create_token(owner, key_id, scopes, token_type)
+        let token = self.create_token(owner, key_id, scopes, token_type)?;
+        Ok(TokenResponse { access_token: token, refresh_token: None, token_type: "Bearer".to_string(), expires_in: 600 })
     }
 
     /// Helper function to generate both, access and refresh token, at once. Calls [`JWTService::create_token`].
@@ -190,6 +191,12 @@ impl JWTService {
         let mut blklist = self.blacklist.write().await;
 
         blklist.retain(|_, &mut expiry| expiry >= now);
+    }
+
+    /// Test Helper: Returns current instance of blacklist 
+    #[cfg(test)]
+    pub async fn read_blacklist(&self) -> HashMap<i32, NaiveDateTime> {
+        self.blacklist.read().await.clone()
     }
 }
 
