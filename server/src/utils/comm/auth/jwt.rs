@@ -50,7 +50,7 @@ impl JWTService {
         scopes: Vec<String>,
         token_type: TokenType,
     ) -> Result<String, KohakuError> {
-        let management_scope = scopes.contains(&"key:manage".to_string());
+        let management_scope = scopes.contains(&"keys:manage".to_string());
         let is_bootstrap = token_type == TokenType::Bootstrap;
 
         // Check if given Arguments are valid (`keys:manage` exlcusively and uniquely for bootstrap key)
