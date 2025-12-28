@@ -130,6 +130,6 @@ pub fn extract_prefix(key: &str) -> Result<String, KohakuError> {
             parts.len()
         )));
     }
-    let (prefix, _) = parts.split_at(3);
+    let (prefix, _) = parts.split_at(2);
     Ok(prefix.join("_").to_string())
 }
