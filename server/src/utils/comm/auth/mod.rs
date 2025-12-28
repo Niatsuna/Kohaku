@@ -4,7 +4,7 @@ use crate::utils::{
     comm::auth::{
         api_key::{extract_prefix, verify_key},
         jwt::get_jwtservice,
-        models::{get_apikey, TokenResponse},
+        models::{get_apikey, Claims, TokenResponse, TokenType},
     },
     config::get_config,
     error::KohakuError,
@@ -24,6 +24,53 @@ pub mod models;
 /// Configures server so that requests get routed to the correct functions
 pub fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/login", web::post().to(login));
+}
+
+/// Checks if a given [`HttpRequest`] has a valid token to access this data
+///
+/// # Params
+/// - `req` : [`HttpRequest`] which holds the JWT in its header
+/// - `required_scopes` : [`Option<Vec<&str>>`] with required permission scopes in a `category:verb` manner. At [`None`], no permission is required and only the validation of the access token is necessary
+///
+/// # Returns
+/// A [`Result`] which is either:
+/// - [`Ok`] : Indicating that the token has valid permissions to access the resource
+/// - [`Err`] : A [`KohakuError`] indicating that some validation process failed
+pub async fn check_authorization(
+    req: &HttpRequest,
+    required_scopes: Option<Vec<&str>>,
+) -> Result<Claims, KohakuError> {
+    // Extract token from header
+    let token = req
+        .headers()
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .ok_or(KohakuError::ValidationError("Missing token".to_string()))?;
+
+    // Validate token
+    let service = get_jwtservice()?;
+    let claims = service.validate_token(token)?;
+
+    // Check if key is blaclisted
+    if service.is_blacklisted(claims.key_id).await {
+        return Err(KohakuError::Unauthorized(
+            "API Key is blacklisted / was revoked!".to_string(),
+        ));
+    }
+
+    // Check scopes
+    let permission = required_scopes.is_none()
+        || required_scopes
+            .unwrap()
+            .iter()
+            .all(|scope| claims.scopes.contains(&scope.to_string()));
+    if !permission {
+        return Err(KohakuError::Unauthorized(
+            "API Key has not the required permissions!".to_string(),
+        ));
+    }
+    Ok(claims)
 }
 
 /// API Key login endpoint.
@@ -61,7 +108,7 @@ async fn login(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
         return Ok(HttpResponse::Ok().json(response));
     }
     // Check if API Key can be found in database
-    let prefix = extract_prefix(api_key);
+    let prefix = extract_prefix(api_key)?;
     let candidates = get_apikey(None, Some(prefix)).await?;
 
     let mut verified_key = None;

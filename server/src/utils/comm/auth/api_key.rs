@@ -113,13 +113,23 @@ pub fn verify_key(key: &str, hash: &str) -> Result<bool, KohakuError> {
 
 /// Extracts the prefix from a given API Key.
 ///
-/// The prefix ends at the second `_` char.
+/// Format is `khk_XXXXXX_XXXX...` and the prefix ends at (excludingly) the second '_'
 ///
 /// # Parameters
 /// - `key` : Prior generated API key
 ///
 /// # Returns
-/// A [`String`] up until the second `_` (Default : 10-char long)
-pub fn extract_prefix(key: &str) -> String {
-    key.split('_').take(2).collect::<Vec<_>>().join("_")
+/// A [`Result`] which is either
+/// - [`Ok`] : A [`String`] holding the prefix starting with `khk_`
+/// - [`Err`] : A [KohakuError::ValidationError] if the given API key has an invalid format
+pub fn extract_prefix(key: &str) -> Result<String, KohakuError> {
+    let parts = key.split('_').collect::<Vec<_>>();
+    if parts.len() != 3 {
+        return Err(KohakuError::ValidationError(format!(
+            "Illegal formatting: API Key should have 3 parts but had {} parts",
+            parts.len()
+        )));
+    }
+    let (prefix, _) = parts.split_at(3);
+    Ok(prefix.join("_").to_string())
 }
