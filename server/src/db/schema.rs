@@ -5,7 +5,7 @@ diesel::table! {
         id -> Int4,
         #[max_length = 255]
         hashed_key -> Varchar,
-        #[max_length = 6]
+        #[max_length = 10]
         key_prefix -> Varchar,
         #[max_length = 255]
         owner -> Varchar,
