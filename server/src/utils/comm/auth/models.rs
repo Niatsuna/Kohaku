@@ -188,7 +188,7 @@ pub enum TokenType {
 }
 
 /// JsonWebToken Claim
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Claims {
     /// Identifier which service / user uses this key
     pub owner: String,
