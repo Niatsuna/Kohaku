@@ -181,8 +181,17 @@ impl JWTService {
     /// At the current implementation every JWT access token will expire regardless.
     /// # Parameters
     /// - `key_id` : Identifier of the underlying [`ApiKey`] inside the database
-    pub async fn blacklist_key(&self, key_id: i32) -> Result<(), KohakuError> {
-        let expiry = Utc::now().naive_utc() + Duration::minutes(30);
+    /// - `duration` : [`Option<i64>`] Amount of seconds the key is blacklisted for. If [None] the default of 30 minutes is the used duration.
+    pub async fn blacklist_key(
+        &self,
+        key_id: i32,
+        duration: Option<i64>,
+    ) -> Result<(), KohakuError> {
+        let dur = match duration {
+            Some(i) => i,
+            None => 30 * 60,
+        };
+        let expiry = Utc::now().naive_utc() + Duration::seconds(dur);
         self.blacklist.write().await.insert(key_id, expiry);
 
         Ok(())
