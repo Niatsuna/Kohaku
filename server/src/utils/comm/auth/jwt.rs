@@ -34,10 +34,14 @@ impl JWTService {
     /// Bootstrap and access tokens are short-lived with 10 and 15 minutes respectively.
     /// Refresh tokens live for 30 days.
     ///
+    /// If the `token_type` is [`TokenType::Bootstrap`], the expected `key_id` is `-1` and the `scopes` can only consist of `keys:manage`.
+    /// For the other two types, the constrainst are that `key_id >= 0` and that the `scopes` are not including `keys:manage`.
+    ///
     /// # Parameters
     /// - `owner` : [`String`] based identifier which service / user uses this key
     /// - `key_id`: Identifier of API key in the database
     /// - `scopes`: [`String`] based vector that grants permissions in a `category:verb` manner
+    /// - `token_type`: [`TokenType::Bootstrap`], [`TokenType::Access`] or [`TokenType::Refresh`]
     ///
     /// # Returns
     /// A [`Result`] which is either
@@ -50,16 +54,25 @@ impl JWTService {
         scopes: Vec<String>,
         token_type: TokenType,
     ) -> Result<String, KohakuError> {
-        let management_scope = scopes.contains(&"keys:manage".to_string());
+        let management_scope = scopes.contains(&"keys:manage".to_string()) && scopes.len() == 1;
         let is_bootstrap = token_type == TokenType::Bootstrap;
 
-        // Check if given Arguments are valid (`keys:manage` exlcusively and uniquely for bootstrap key)
-        if management_scope && !is_bootstrap {
-            return Err(KohakuError::Unauthorized("No general tokens with the scope `keys:manage` can be created! Please refer to the bootstrap key!".to_string()));
-        } else if (!management_scope || scopes.len() > 1) && is_bootstrap {
-            return Err(KohakuError::Unauthorized(
-                "Bootstrap Key must have `keys:manage` and no other permission scopes!".to_string(),
+        // Check if given Arguments are valid (`keys:manage` exlcusively and uniquely for bootstrap key & key_id = -1 for bootstrap)
+        if is_bootstrap && (key_id != -1 || !management_scope) {
+            // Is bootstrap but either the key_id or the scope is invalid
+            return Err(KohakuError::ValidationError(
+                "Invalid arguments for bootstrap key!".to_string(),
             ));
+        } else if !is_bootstrap && (key_id == -1 || management_scope) {
+            // Is general but either the key_id or the scope shows bootstrap properties
+            return Err(KohakuError::ValidationError(
+                "Invalid arguments for general key!".to_string(),
+            ));
+        } else if key_id < -1 {
+            return Err(KohakuError::ValidationError(format!(
+                "Invalid key_id detected: Expected `key_id >= -1` but was {}",
+                key_id
+            )));
         }
 
         // Create claim
@@ -99,7 +112,12 @@ impl JWTService {
         let token_type = TokenType::Bootstrap;
 
         let token = self.create_token(owner, key_id, scopes, token_type)?;
-        Ok(TokenResponse { access_token: token, refresh_token: None, token_type: "Bearer".to_string(), expires_in: 600 })
+        Ok(TokenResponse {
+            access_token: token,
+            refresh_token: None,
+            token_type: "Bearer".to_string(),
+            expires_in: 600,
+        })
     }
 
     /// Helper function to generate both, access and refresh token, at once. Calls [`JWTService::create_token`].
@@ -193,7 +211,7 @@ impl JWTService {
         blklist.retain(|_, &mut expiry| expiry >= now);
     }
 
-    /// Test Helper: Returns current instance of blacklist 
+    /// Test Helper: Returns current instance of blacklist
     #[cfg(test)]
     pub async fn read_blacklist(&self) -> HashMap<i32, NaiveDateTime> {
         self.blacklist.read().await.clone()
