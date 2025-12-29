@@ -54,11 +54,11 @@ impl JWTService {
         scopes: Vec<String>,
         token_type: TokenType,
     ) -> Result<String, KohakuError> {
-        let management_scope = scopes.contains(&"keys:manage".to_string()) && scopes.len() == 1;
+        let management_scope = scopes.contains(&"keys:manage".to_string());
         let is_bootstrap = token_type == TokenType::Bootstrap;
 
         // Check if given Arguments are valid (`keys:manage` exlcusively and uniquely for bootstrap key & key_id = -1 for bootstrap)
-        if is_bootstrap && (key_id != -1 || !management_scope) {
+        if is_bootstrap && (key_id != -1 || !management_scope || scopes.len() != 1) {
             // Is bootstrap but either the key_id or the scope is invalid
             return Err(KohakuError::ValidationError(
                 "Invalid arguments for bootstrap key!".to_string(),
