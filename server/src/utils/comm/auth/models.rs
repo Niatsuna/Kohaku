@@ -13,21 +13,20 @@ use crate::{
 // =========================================== API ============================================= //
 
 #[derive(Debug, Deserialize)]
-pub struct ManageKeyRequest {
-    // Creation
-    /// Identifier which service / user will use this key
-    pub owner: Option<String>,
-    /// Identifier of permission scopes given in a `category:verb` manner
-    pub scopes: Option<Vec<String>>,
-    // Revokation
-    /// Full unhashed API Key (Note: As we revoke it, we dont care if it gets leaked)
-    pub revoke: Option<String>,
+pub struct CreateKeyRequest {
+    pub owner: String,
+    pub scopes: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CreateKeyResponse {
     pub api_key: String,
     pub scopes: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RevokeKeyRequest {
+    pub api_key: String,
 }
 
 #[derive(Debug, Deserialize)]
