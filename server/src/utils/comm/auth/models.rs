@@ -37,7 +37,7 @@ pub struct RefreshRequest {
 // ========================================= API Keys ========================================== //
 
 /// Representation of database entry of a given ApiKey
-#[derive(Debug, Queryable, Selectable, Serialize, Deserialize)]
+#[derive(Debug, Queryable, Selectable, Serialize, Deserialize, Clone)]
 #[diesel(table_name = crate::db::schema::api_keys)]
 pub struct ApiKey {
     /// Serial Primary Key given by the database
@@ -55,7 +55,7 @@ pub struct ApiKey {
 }
 
 /// Form to create a new [struct@ApiKey].
-#[derive(Debug, Insertable)]
+#[derive(Debug, Insertable, Clone)]
 #[diesel(table_name = crate::db::schema::api_keys)]
 pub struct NewApiKey {
     pub hashed_key: String,
