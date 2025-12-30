@@ -5,7 +5,7 @@ use tracing_subscriber::FmtSubscriber;
 use crate::{
     db::migrate,
     utils::{
-        comm::auth::{configure_auth_routes, jwt::init_jwtservice},
+        comm::{self, auth::jwt::init_jwtservice},
         config::{get_config, init_config},
         scheduler::{get_scheduler, init_scheduler},
     },
@@ -64,7 +64,8 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(|| {
         App::new().service(
-            web::scope("/api").service(web::scope("/auth").configure(configure_auth_routes)),
+            web::scope("/api")
+                .service(web::scope("/auth").configure(comm::auth::routes::configure)),
         )
     })
     .bind((config.server_addr.clone(), config.server_port))?
