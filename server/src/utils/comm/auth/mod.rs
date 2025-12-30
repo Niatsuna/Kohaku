@@ -4,7 +4,7 @@ use crate::utils::{
     comm::auth::{
         api_key::{extract_prefix, verify_key},
         jwt::get_jwtservice,
-        models::{get_apikey, ApiKey, Claims, TokenType},
+        models::{get_apikey, ApiKey, Claims},
     },
     error::KohakuError,
 };
