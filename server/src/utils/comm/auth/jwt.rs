@@ -3,6 +3,7 @@ use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation}
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{OnceCell, RwLock};
 
+use crate::utils::comm::auth::token_duration;
 #[allow(unused_imports)] // ApiKey is linked in the documentation
 use crate::utils::{
     comm::auth::models::{ApiKey, Claims, TokenResponse, TokenType},
@@ -77,11 +78,7 @@ impl JWTService {
 
         // Create claim
         let now = Utc::now().timestamp() as usize;
-        let duration = match token_type {
-            TokenType::Bootstrap => 10 * 60,         // 10 Minutes
-            TokenType::Access => 15 * 60,            // 15 Minutes
-            TokenType::Refresh => 30 * 24 * 60 * 60, // 30 days
-        };
+        let duration = token_duration(&token_type);
 
         let claims = Claims {
             owner,

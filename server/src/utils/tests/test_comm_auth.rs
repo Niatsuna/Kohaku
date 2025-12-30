@@ -9,6 +9,7 @@ use crate::utils::comm::auth::{
     api_key::{extract_prefix, generate_key, hash_key, random_string, verify_key, CHARSET},
     jwt::{get_jwtservice, init_jwtservice},
     models::{Claims, TokenType},
+    token_duration,
 };
 
 // ========================================= API Keys ========================================== //
@@ -217,11 +218,7 @@ fn test_create_token_valid(
 
     let decoding_key = DecodingKey::from_secret(&key.as_bytes());
     let iat = Utc::now().timestamp() as usize;
-    let duration = match token_type {
-        TokenType::Bootstrap => 10 * 60,         // 10 Minutes
-        TokenType::Access => 15 * 60,            // 15 Minutes
-        TokenType::Refresh => 30 * 24 * 60 * 60, // 30 days
-    };
+    let duration = token_duration(&token_type);
     let exp = iat + duration;
     // Should succeed
     let val = service.create_token(owner.clone(), key_id, scopes.clone(), token_type.clone());
@@ -278,16 +275,16 @@ fn test_create_token_invalid(
 
 // ================================= JWTService::validate_token
 #[rstest]
-#[case(0, vec!["events:subscribe"], TokenType::Access, 15 * 60)]
-#[case(20, vec!["events:subscribe"], TokenType::Refresh, 30 * 24 * 60 * 60)]
-#[case(-1, vec!["keys:manage"], TokenType::Bootstrap, 10 * 60)]
+#[case(0, vec!["events:subscribe"], TokenType::Access)]
+#[case(20, vec!["events:subscribe"], TokenType::Refresh)]
+#[case(-1, vec!["keys:manage"], TokenType::Bootstrap)]
 fn test_validate_token_valid(
     #[case] key_id: i32,
     #[case] scopes: Vec<&str>,
     #[case] token_type: TokenType,
-    #[case] duration: usize,
 ) {
     let iat = Utc::now().timestamp() as usize;
+    let duration = token_duration(&token_type);
     let exp = iat + duration;
     let claims = Claims {
         owner: "test-suite".to_string(),
@@ -313,16 +310,16 @@ fn test_validate_token_valid(
 }
 
 #[rstest]
-#[case(0, vec!["events:subscribe"], TokenType::Access, 15 * 60)]
-#[case(20, vec!["events:subscribe"], TokenType::Refresh, 30 * 24 * 60 * 60)]
-#[case(-1, vec!["keys:manage"], TokenType::Bootstrap, 10 * 60)]
+#[case(0, vec!["events:subscribe"], TokenType::Access)]
+#[case(20, vec!["events:subscribe"], TokenType::Refresh)]
+#[case(-1, vec!["keys:manage"], TokenType::Bootstrap)]
 fn test_validate_token_invalid(
     #[case] key_id: i32,
     #[case] scopes: Vec<&str>,
     #[case] token_type: TokenType,
-    #[case] duration: usize,
 ) {
     let iat = Utc::now().timestamp() as usize;
+    let duration = token_duration(&token_type);
     let exp = iat + duration;
     let claims = Claims {
         owner: "test-suite".to_string(),

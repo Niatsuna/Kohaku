@@ -4,7 +4,7 @@ use crate::utils::{
     comm::auth::{
         api_key::{extract_prefix, verify_key},
         jwt::get_jwtservice,
-        models::{get_apikey, ApiKey, Claims},
+        models::{get_apikey, ApiKey, Claims, TokenType},
     },
     error::KohakuError,
 };
@@ -13,6 +13,15 @@ pub mod api_key;
 pub mod jwt;
 pub mod models;
 pub mod routes;
+
+/// Helper: Quick lookup for token type duration (seconds)
+pub fn token_duration(token_type: &TokenType) -> usize {
+    match token_type {
+        TokenType::Bootstrap => 10 * 60,         // 10 minutes
+        TokenType::Access => 15 * 60,            // 15 minutes
+        TokenType::Refresh => 30 * 24 * 60 * 60, // 30 days
+    }
+}
 
 /// Checks if the given key is valid
 ///
