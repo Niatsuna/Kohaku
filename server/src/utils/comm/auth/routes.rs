@@ -4,7 +4,7 @@ use tracing::info;
 use crate::utils::{
     comm::auth::{
         api_key::{extract_prefix, generate_key, hash_key, verify_key},
-        check_authorization,
+        check_authorization_key, check_authorization_token, extract_key,
         jwt::get_jwtservice,
         models::{
             create_apikey, delete_apikey, get_apikey, CreateKeyRequest, CreateKeyResponse,
@@ -36,12 +36,11 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
 /// # Errors
 /// Please see [`KohakuError::details`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
 async fn login(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
-    let api_key = req
-        .headers()
-        .get("X-API-Key")
-        .and_then(|h| h.to_str().ok())
-        .ok_or_else(|| KohakuError::ValidationError("Missing X-API-Key header".to_string()))?;
-
+    let api_key = extract_key(&req);
+    if api_key.is_none() {
+        return Err(KohakuError::Unauthorized("Missing API key".to_string()));
+    }
+    let api_key = api_key.unwrap();
     let config = get_config();
     let service = get_jwtservice()?;
 
@@ -52,29 +51,7 @@ async fn login(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
         return Ok(HttpResponse::Ok().json(response));
     }
     // Check if API Key can be found in database
-    let prefix = extract_prefix(api_key)?;
-    let candidates = get_apikey(None, Some(prefix)).await?;
-
-    let mut verified_key = None;
-    for candidate in candidates {
-        if let Ok(true) = verify_key(api_key, &candidate.hashed_key) {
-            verified_key = Some(candidate);
-            break;
-        }
-    }
-
-    if verified_key.is_none() {
-        return Err(KohakuError::Unauthorized("Invalid API key".to_string()));
-    } else if service
-        .is_blacklisted(verified_key.clone().unwrap().id)
-        .await
-    {
-        return Err(KohakuError::Unauthorized(
-            "API key previously revoked. Please request a new API key!".to_string(),
-        ));
-    }
-    // Generate tokens
-    let verified_key = verified_key.unwrap();
+    let verified_key = check_authorization_key(&api_key).await?;
     let scopes = verified_key.scopes.clone();
     let response = service.create_tokens(verified_key.id, &verified_key.owner, scopes)?;
 
@@ -94,7 +71,7 @@ async fn login(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
 /// # Errors
 /// Please see [`KohakuError::details`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
 async fn refresh(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
-    let claims = check_authorization(&req, None).await?;
+    let claims = check_authorization_token(&req, None).await?;
     // Check if token is a refresh token
     if claims.token_type != TokenType::Refresh {
         return Err(KohakuError::ValidationError(
@@ -139,7 +116,7 @@ async fn create(
     req: HttpRequest,
     body: web::Json<CreateKeyRequest>,
 ) -> Result<HttpResponse, KohakuError> {
-    let _ = check_authorization(&req, Some(vec!["keys:manage"])).await?;
+    let _ = check_authorization_token(&req, Some(vec!["keys:manage"])).await?;
     if body.scopes.contains(&"keys:manage".to_string()) {
         return Err(KohakuError::ValidationError(
             "Invalid key scope: keys:manage is bootstrap key exclusive!".to_string(),
@@ -186,7 +163,7 @@ async fn revoke(
     req: HttpRequest,
     body: web::Json<RevokeKeyRequest>,
 ) -> Result<HttpResponse, KohakuError> {
-    let _ = check_authorization(&req, Some(vec!["keys:manage"])).await?;
+    let _ = check_authorization_token(&req, Some(vec!["keys:manage"])).await?;
     let service = get_jwtservice()?;
 
     // Check if such a key actually exists
