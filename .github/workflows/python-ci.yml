@@ -14,8 +14,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  format:
-    name: Format Check
+  python-check:
+    name: Python Format Check
     runs-on: ubuntu-latest
     
     steps:
@@ -35,8 +35,8 @@ jobs:
     - name: Check client formatting
       run: make check-client
 
-  test:
-    name: Tests
+  python-test:
+    name: Python Test
     runs-on: ubuntu-latest
     env:
       CLIENT_TOKEN: Lorem_ipsum

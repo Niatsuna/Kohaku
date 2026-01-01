@@ -14,8 +14,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  format:
-    name: Format Check
+  rust-check:
+    name: Rust Format Check
     runs-on: ubuntu-latest
 
     steps:
@@ -32,8 +32,8 @@ jobs:
     - name: Check server formatting
       run: make check-server
 
-  test:
-    name: Tests
+  rust-test:
+    name: Rust Test
     runs-on: ubuntu-latest
     
     steps:
