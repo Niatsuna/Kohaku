@@ -130,7 +130,7 @@ impl JWTService {
     /// A [`Result`] which is either
     /// - [`Ok`] : A [`TokenResponse`] holding the access and refresh token
     /// - [`Err`] : Either [KohakuError::InternalServerError] when the encoding fails, or [KohakuError::Unauthorized]
-    ///             when the scope contains the `key` category which is exclusive to the bootstrap key
+    ///   when the scope contains the `key` category which is exclusive to the bootstrap key
     pub fn create_tokens(
         &self,
         key_id: i32,
@@ -184,10 +184,7 @@ impl JWTService {
         key_id: i32,
         duration: Option<i64>,
     ) -> Result<(), KohakuError> {
-        let dur = match duration {
-            Some(i) => i,
-            None => 30 * 60,
-        };
+        let dur = duration.unwrap_or(30 * 60);
         let expiry = Utc::now().naive_utc() + Duration::seconds(dur);
         self.blacklist.write().await.insert(key_id, expiry);
 

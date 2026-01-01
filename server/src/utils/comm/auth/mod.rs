@@ -34,12 +34,12 @@ pub fn token_duration(token_type: &TokenType) -> usize {
 /// - [`Err`]: A [`KohakuError`] which indicates that ANY operation failed, the key is invalid
 pub async fn check_authorization_key(key: &str) -> Result<ApiKey, KohakuError> {
     // Check if the key is valid
-    let prefix = extract_prefix(&key)?;
+    let prefix = extract_prefix(key)?;
     let candidates = get_apikey(None, Some(prefix)).await?;
 
     let mut verified_key = None;
     for candidate in candidates {
-        if verify_key(&key, &candidate.hashed_key)? {
+        if verify_key(key, &candidate.hashed_key)? {
             verified_key = Some(candidate);
             break;
         }
@@ -121,5 +121,5 @@ fn extract_token(req: &HttpRequest) -> Option<String> {
         .get("Authorization")
         .and_then(|h| h.to_str().ok())
         .and_then(|h| h.strip_prefix("Bearer "))
-        .and_then(|h| Some(h.to_string()))
+        .map(|h| h.to_string())
 }

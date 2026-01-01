@@ -51,7 +51,7 @@ async fn login(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
         return Ok(HttpResponse::Ok().json(response));
     }
     // Check if API Key can be found in database
-    let verified_key = check_authorization_key(&api_key).await?;
+    let verified_key = check_authorization_key(api_key).await?;
     let scopes = verified_key.scopes.clone();
     let response = service.create_tokens(verified_key.id, &verified_key.owner, scopes)?;
 
@@ -176,7 +176,7 @@ async fn revoke(
             // Found key: Remove it from database and blacklist it
             let key_id = candidate.id;
             delete_apikey(Some(key_id), None).await?;
-            let _ = service.blacklist_key(key_id, None).await?;
+            service.blacklist_key(key_id, None).await?;
             info!("[Authentication] - API Key with prefix {} revoked!", prefix);
             return Ok(HttpResponse::Ok().finish());
         }
