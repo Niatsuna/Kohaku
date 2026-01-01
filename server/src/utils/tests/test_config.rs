@@ -8,8 +8,9 @@ use serial_test::serial;
 fn setup_env_vars(only_required: bool) {
     cleanup_env_vars(); // Ensure clean-slate
 
-    env::set_var("SECRET", "secret");
     env::set_var("DATABASE_URL", "some_url/db");
+    env::set_var("BOOTSTRAP_KEY", "secret1");
+    env::set_var("SERVER_ENCRYPTION_KEY", "secret2");
     if !only_required {
         // Skip these that are not required to not panic Config::new()
         env::set_var("SERVER_ADDR", "localhost");
@@ -24,7 +25,8 @@ fn cleanup_env_vars() {
         "SERVER_PORT",
         "SERVER_LOGGING_LEVEL",
         "DATABASE_URL",
-        "SECRET",
+        "BOOTSTRAP_KEY",
+        "SERVER_ENCRYPTION_KEY",
     ];
     for v in vars {
         env::remove_var(v);
@@ -60,7 +62,8 @@ fn test_config_with_env_vars() {
     assert_eq!(config.server_port, 9000);
     assert_eq!(config.logging_level, tracing::Level::WARN);
     assert_eq!(config.database_url, "some_url/db");
-    assert_eq!(config.secret, "secret".to_string().into_bytes());
+    assert_eq!(config.bootstrap_key, "secret1".to_string());
+    assert_eq!(config.encryption_key, "secret2".to_string().into_bytes());
 
     cleanup_env_vars();
 }

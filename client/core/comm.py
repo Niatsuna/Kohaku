@@ -1,179 +1,114 @@
 import asyncio
-import hashlib
-import hmac
-import json
 import logging
-import time
-import uuid
-from enum import Enum
-from typing import Any
+from pathlib import Path
 
 import websockets
-from websockets.client import WebSocketClientProtocol
+from websockets.asyncio.client import ClientConnection, connect
+
+from core.config import get_config
 
 logger = logging.getLogger(__name__)
 
 
-class MessageType(str, Enum):
-    AUTHENTIFICATION = "auth"
-    PING = "ping"
-    PONG = "pong"
-    NOTIFICATION = "notification"
+class WsClient:
+    def __init__(self, url: str):
+        self.url: str = url
+        self.api_key: str | None = self.load_api_key()
+        self.websocket: ClientConnection | None = None
+        self.running: bool = False
+        self.heartbeat_timeout: int = 90
 
-
-class WsMessage:
-    def __init__(self, timestamp: int, message_id: str, message: dict[str, Any]):
-        self.timestamp = timestamp
-        self.message_id = message_id
-        self.message = message
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"timestamp": self.timestamp, "message_id": self.message_id, "message": self.message}
-
-
-class WebSocketClient:
-    def __init__(self, uri: str, secret: str):
-        self.uri = uri
-        self.secret = secret
-        self.ws: WebSocketClientProtocol | None = None
-        self.running = False
-        self.connected = False
-        self.reconnect_delay = 5
-        self.max_reconnect_delay = 30
-        self.pending_responses: dict[str, asyncio.Future] = {}
-
-    def sign_message(self, message: WsMessage) -> str:
-        """Sign a message with HMAC-SHA256"""
-        payload = json.dumps(message.to_dict())
-
-        signature = hmac.new(self.secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-
-        return f"{payload}.{signature}"
-
-    def verify_message(self, data: str) -> WsMessage | None:
-        """Verify and parse an incoming message"""
-        parts = data.rsplit(".", 1)
-        if len(parts) != 2:
-            logger.warning("Invalid message format")
+    def load_api_key(self) -> str | None:
+        """Load API key from .secret file"""
+        secret_path = Path(".secret")
+        if not secret_path.exists():
+            logger.error(f"Secret file '{secret_path}' not found")
             return None
 
-        payload, signature = parts
-
-        # Verify signature
-        expected_sig = hmac.new(self.secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-
-        if expected_sig != signature:
-            logger.warning("Invalid signature")
-            return None
-
-        # Parse payload
         try:
-            frame_dict = json.loads(payload)
-            frame = WsMessage(
-                message=frame_dict["message"],
-                timestamp=frame_dict["timestamp"],
-                message_id=frame_dict["message_id"],
-            )
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.warning(f"Failed to parse message: {e}")
-            return None
-
-        # Check timestamp (reject messages older than 30 seconds)
-        now = int(time.time())
-        if abs(now - frame.timestamp) > 30:
-            logger.warning("Message expired")
-            return None
-
-        return frame
-
-    async def send_message(self, message: dict[str, Any]) -> None:
-        """Send a signed message to the server"""
-        if not self.ws:
-            raise RuntimeError("WebSocket not connected")
-
-        frame = WsMessage(message=message, timestamp=int(time.time()), message_id=str(uuid.uuid4()))
-
-        signed = self.sign_message(frame)
-        await self.ws.send(signed)
-
-    async def handle_message(self, frame: WsMessage):
-        """Handle incoming messages based on type"""
-        msg = frame.message
-        msg_type = msg.get("type")
-
-        if msg_type == MessageType.PING:
-            # Respond to ping
-            pong = {"type": MessageType.PONG, "id": msg.get("id")}
-            await self.send_message(pong)
-            logger.info(f"Responded to ping: {msg.get('id')}")
-
-        elif msg_type == MessageType.NOTIFICATION:
-            # Handle notification from server
-            data = msg.get("data")
-            logger.info(f"Received notification: {data}")
-
-        elif msg_type == MessageType.PONG:
-            data = msg.get("id")
-            logger.info(f"Received pong: {data}")
-
-        else:
-            logger.info(f"Unknown message type: {msg_type}")
-
-    async def listen(self):
-        """Listen for incoming messages"""
-        try:
-            async for message in self.ws:
-                frame = self.verify_message(message)
-                if frame:
-                    await self.handle_message(frame)
-                else:
-                    logger.info("Received invalid message")
-        except websockets.exceptions.ConnectionClosed:
-            logger.info("WebSocket connection closed")
+            api_key = secret_path.read_text().strip()
+            if not api_key:
+                logger.error(f"Secret file '{secret_path}' is empty")
+                return None
+            logger.info("API key loaded successfully")
+            return api_key
         except Exception as e:
-            logger.info(f"Error in listen loop: {e}")
+            logger.error(f"Failed to read secret file: {e}")
+            return None
+
+    async def connect(self) -> bool:
+        """Establish WebSocket connection with API key in header"""
+        if self.api_key is not None:
+            headers = {"X-API-Key": self.api_key}
+            try:
+                self.websocket = await connect(self.url, additional_headers=headers)
+                self.running = True
+                logger.info(f"Connected to {self.url}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to connect: {e}")
+                return False
+        return False
+
+    async def receive_task(self):
+        """Handle incoming messages from server"""
+        try:
+            while self.running and self.websocket:
+                message = await self.websocket.recv()
+                if isinstance(message, str):
+                    logger.info("Received event message from server")
+                    await self.handle_server_message(message)
+        except websockets.exceptions.ConnectionClosed:
+            logger.info("Connection closed by server")
+            self.running = False
+        except Exception as e:
+            logger.error(f"Error in receive task: {e}")
+
+    async def heartbeat_task(self):
+        """Monitor server activity and close if no response"""
+        last_activity = asyncio.get_event_loop().time()
+
+        while self.running and self.websocket:
+            await asyncio.sleep(30)
+            current_time = asyncio.get_event_loop().time()
+
+            if current_time - last_activity > self.heartbeat_timeout:
+                logger.warning("No server activity detected, closing connection")
+                self.running = False
+                if self.websocket:
+                    await self.websocket.close()
+                break
+
+            if self.websocket and not self.websocket.closed:
+                last_activity = current_time
 
     async def run(self):
-        """Main run loop with auto-reconnect"""
-        self.running = True
+        """Run all tasks concurrently"""
+        if not await self.connect():
+            return
 
-        while self.running:
-            try:
-                await self.connect()
-                await self.listen()
-            except Exception as e:
-                logger.info(f"Connection error: {e}")
-
-            if self.running:
-                self.connected = False
-                logger.info(f"Reconnecting in {self.reconnect_delay} seconds...")
-                await asyncio.sleep(self.reconnect_delay)
-
-                # Exponential backoff
-                if self.reconnect_delay < self.max_reconnect_delay:
-                    self.reconnect_delay = min(self.reconnect_delay * 2, self.max_reconnect_delay)
-                else:
-                    # If connection could not be established by now, discard the websocket connection completely
-                    logger.error("Couldn't establish connection! Discarding attempt completely!")
-                    await self.stop()
-
-    async def connect(self):
-        """Connect to WebSocket with authentication"""
         try:
-            self.ws = await websockets.connect(self.uri, ping_interval=60, ping_timeout=10)
-            logger.info("WebSocket connected")
-            self.connected = True
-            self.reconnect_delay = 5  # Reset reconnect delay on success
+            # Run receive and heartbeat tasks concurrently
+            # Ping/Pong get automatically handled by the websockets library
+            await asyncio.gather(self.receive_task(), self.heartbeat_task(), return_exceptions=True)
+        finally:
+            if self.websocket:
+                await self.websocket.close()
+            logger.info("WebSocket client shut down")
 
-            # Send auth message
-            await self.send_message({"type": "auth"})
-        except Exception as e:
-            logger.info(f"Connection failed: {e}")
-            raise
+    async def handle_server_message(self, message: str):
+        """Process incoming server events"""
+        # TODO: Implement
+        logger.info(f"Process message: {message}")
 
-    async def stop(self):
-        """Stop the client and close connection"""
-        self.running = False
-        self.connected = False
-        if self.ws:
-            await self.ws.close()
+
+wsclient: WsClient | None = None
+
+
+def get_wsclient():
+    """Get the global WsClient"""
+    global wsclient
+    if wsclient is None:
+        config = get_config()
+        wsclient = WsClient(config.server_ws_url)
+    return wsclient

@@ -35,9 +35,9 @@ jobs:
     env:
       CLIENT_TOKEN: Lorem_ipsum
       CLIENT_PREFIX: Lorem_ipsum
-      SERVER_ADDR: Lorem_ipsum
-      SERVER_PORT: 5000
-      SECRET: Lorem_ipsum
+      SERVER_WS_URL: Lorem_ipsum
+      SERVER_API_URL: Lorem_ipsum
+      OWNER_ID: 1234567
     
     steps:
     - uses: actions/checkout@v4

@@ -5,7 +5,7 @@ use tracing_subscriber::FmtSubscriber;
 use crate::{
     db::migrate,
     utils::{
-        comm::ws::{init_client_session, websocket_handler},
+        comm::{self, auth::jwt::init_jwtservice, websocket::manager::init_manager},
         config::{get_config, init_config},
         scheduler::{get_scheduler, init_scheduler},
     },
@@ -25,7 +25,7 @@ async fn main() -> std::io::Result<()> {
     FmtSubscriber::builder()
         .with_max_level(config.logging_level)
         .with_line_number(true)
-        .with_file(true)
+        //.with_file(true)
         .with_target(false)
         .with_thread_ids(true)
         .pretty()
@@ -51,11 +51,26 @@ async fn main() -> std::io::Result<()> {
         info!("Scheduler started!");
     }
 
-    // Start websocket
-    init_client_session();
+    // Start JWT Service
+    info!("Setting up JWTService ...");
+    if init_jwtservice(&config.encryption_key).is_ok() {
+        info!("JWTService started!");
+    } else {
+        error!("Couldn't initialize JWTService! Protected endpoints will return an error!");
+    }
 
-    HttpServer::new(|| App::new().route("/ws", web::get().to(websocket_handler)))
-        .bind((config.server_addr.clone(), config.server_port))?
-        .run()
-        .await
+    // Start websocket
+    let _ = init_manager();
+
+    HttpServer::new(|| {
+        App::new()
+            .service(
+                web::scope("/api")
+                    .service(web::scope("/auth").configure(comm::auth::routes::configure)),
+            )
+            .route("/ws", web::get().to(comm::websocket::routes::ws_handler))
+    })
+    .bind((config.server_addr.clone(), config.server_port))?
+    .run()
+    .await
 }
