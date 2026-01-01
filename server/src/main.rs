@@ -5,7 +5,7 @@ use tracing_subscriber::FmtSubscriber;
 use crate::{
     db::migrate,
     utils::{
-        comm::{self, auth::jwt::init_jwtservice},
+        comm::{self, auth::jwt::init_jwtservice, websocket::manager::init_manager},
         config::{get_config, init_config},
         scheduler::{get_scheduler, init_scheduler},
     },
@@ -25,7 +25,7 @@ async fn main() -> std::io::Result<()> {
     FmtSubscriber::builder()
         .with_max_level(config.logging_level)
         .with_line_number(true)
-        .with_file(true)
+        //.with_file(true)
         .with_target(false)
         .with_thread_ids(true)
         .pretty()
@@ -60,13 +60,15 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Start websocket
-    // TODO:
+    let _ = init_manager();
 
     HttpServer::new(|| {
-        App::new().service(
-            web::scope("/api")
-                .service(web::scope("/auth").configure(comm::auth::routes::configure)),
-        )
+        App::new()
+            .service(
+                web::scope("/api")
+                    .service(web::scope("/auth").configure(comm::auth::routes::configure)),
+            )
+            .route("/ws", web::get().to(comm::websocket::routes::ws_handler))
     })
     .bind((config.server_addr.clone(), config.server_port))?
     .run()

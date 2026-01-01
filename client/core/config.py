@@ -16,10 +16,10 @@ class Config:
 
     token: str
     prefix: str
-    server_addr: str
-    server_port: str
-    secret: str
+    server_ws_url: str
+    server_api_url: str
     repo: str
+    owner_id: int
 
     logging_level: str = "INFO"
     color_default: int = 0x1B6C8E
@@ -29,9 +29,9 @@ class Config:
         required = {
             "CLIENT_TOKEN": self.token,
             "CLIENT_PREFIX": self.prefix,
-            "SERVER_ADDR": self.server_addr,
-            "SERVER_PORT": self.server_port,
-            "SECRET": self.secret,
+            "SERVER_WS_URL": self.server_ws_url,
+            "SERVER_API_URL": self.server_api_url,
+            "OWNER_ID": self.owner_id,
         }
 
         for name, val in required.items():
@@ -52,11 +52,11 @@ class Config:
             config = cls(
                 token=os.getenv("CLIENT_TOKEN", ""),
                 prefix=os.getenv("CLIENT_PREFIX", ""),
-                server_addr=os.getenv("SERVER_ADDR", ""),
-                server_port=os.getenv("SERVER_PORT", ""),
-                secret=os.getenv("SECRET", ""),
+                server_ws_url=os.getenv("SERVER_WS_URL", ""),
+                server_api_url=os.getenv("SERVER_API_URL", ""),
                 logging_level=os.getenv("CLIENT_LOGGING_LEVEL", "INFO"),
                 repo=os.getenv("CLIENT_REPO_URL"),
+                owner_id=os.getenv("OWNER_ID"),
             )
             logger.info("Configuration loaded successfully")
             return config

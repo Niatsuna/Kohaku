@@ -1,7 +1,3 @@
-/*
-  TODO:
-  Add Endpoint
-    - /ws
-*/
 pub mod connection;
-pub mod models;
+pub mod manager;
+pub mod routes;

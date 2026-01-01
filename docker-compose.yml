@@ -33,8 +33,8 @@ services:
       - kohaku-server
     environment:
       - OWNER_ID=${OWNER_ID}
-      - SERVER_ADDR=kohaku-server
-      - SERVER_PORT=${SERVER_PORT}
+      - SERVER_WS_URL=ws://kohaku-server:${SERVER_PORT}/ws
+      - SERVER_API_URL=http://kohaku-server:${SERVER_PORT}/api
       - CLIENT_LOGGING_LEVEL=${CLIENT_LOGGING_LEVEL}
       - CLIENT_PREFIX=${CLIENT_PREFIX}
       - CLIENT_TOKEN=${CLIENT_TOKEN}
