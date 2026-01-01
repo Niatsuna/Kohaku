@@ -56,7 +56,7 @@ class Config:
                 server_api_url=os.getenv("SERVER_API_URL", ""),
                 logging_level=os.getenv("CLIENT_LOGGING_LEVEL", "INFO"),
                 repo=os.getenv("CLIENT_REPO_URL"),
-                owner_id=os.getenv("OWNER_ID"),
+                owner_id=int(os.getenv("OWNER_ID")),
             )
             logger.info("Configuration loaded successfully")
             return config
