@@ -15,10 +15,16 @@
 <!-- Top Badges -->
 <div align="center">
 
-  ![server tests](https://img.shields.io/github/actions/workflow/status/Niatsuna/Kohaku/rust-ci.yml?label=Server%20Tests)
-  ![client tests](https://img.shields.io/github/actions/workflow/status/Niatsuna/Kohaku/python-ci.yml?label=Client%20Tests)
+  ![kohaku version](https://img.shields.io/badge/version-pre3.0.0-orange?style=flat)
+  ![server tests](https://img.shields.io/github/actions/workflow/status/Niatsuna/Kohaku/rust-ci.yml?label=Server%20Tests&branch=main)
+  ![client tests](https://img.shields.io/github/actions/workflow/status/Niatsuna/Kohaku/python-ci.yml?label=Client%20Tests&branch=main)
+
+  > ⚠️ The current main branch is not a full release yet but shows minimal core features ⚠️
+
+  _please stay tuned for release `3.0.0`_
 
 </div>
+
 
 <!-- OVERVIEW -->
 ## Overview
