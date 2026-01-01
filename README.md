@@ -3,7 +3,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/Niatsuna/Kohaku">
-    <img src="data/banner.png" alt="Logo" height="200">
+    <img src="./.docs/images/banner.png" alt="Logo" height="200">
   </a>
 
 <h3 align="center">Kohaku</h3>
