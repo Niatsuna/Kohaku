@@ -3,8 +3,14 @@ name: Rust CI
 on:
   push:
     branches: [main, development]
+    paths:
+      - 'server/**'
+      - '.github/workflows/rust-ci.yml'
   pull_request:
     branches: [main, development]
+    paths:
+      - 'server/**'
+      - '.github/workflows/rust-ci.yml'
   workflow_dispatch:
 
 jobs:

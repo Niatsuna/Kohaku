@@ -3,8 +3,14 @@ name: Python CI
 on:
   push:
     branches: [main, development]
+    paths:
+      - 'client/**'
+      - '.github/workflows/python-ci.yml'
   pull_request:
     branches: [main, development]
+    paths:
+      - 'client/**'
+      - '.github/workflows/python-ci.yml'
   workflow_dispatch:
 
 jobs:
