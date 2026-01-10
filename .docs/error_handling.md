@@ -37,6 +37,7 @@ The following table shows what kind of errors are currently available on the ser
 | `Conflict` | Requested transaction violates any underlaying constraints that do not fall under `ValidationError`s business logic (e.g. unique constraint in database entry) | `409` |
 | `TooManyRequests` | Limit for requests in a timeframe reached | `429` |
 | 
+| `AuthenticationError` | Indicates that some process during authentication itself failed (e.g. hashing failed because of a invalid salt, JWTService failed to start); Maps: [`argon2::Error`](https://docs.rs/rust-argon2/latest/argon2/enum.Error.html) | `500`
 | `DatabaseConnectionError` | Database connection is either invalid, closed or failed; Wraps: [`diesel::r2d2::PoolError`](https://docs.diesel.rs/master/diesel/r2d2/type.PoolError.html) | `500` |
 | `DatabaseQueryError` | Database query failed to execute; Wraps: [`diesel::result::Error`](https://docs.diesel.rs/2.1.x/diesel/result/enum.Error.html) | `500`
 | `SchedulerError` | Initialization or task scheduling failed; Wraps: [`tokio_cron_scheduler::JobSchedulerError`](https://docs.rs/tokio-cron-scheduler/latest/tokio_cron_scheduler/enum.JobSchedulerError.html) | `500` |
