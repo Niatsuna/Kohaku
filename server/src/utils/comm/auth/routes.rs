@@ -34,7 +34,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
 /// - [`Err`] : A [`KohakuError`] based on failed operations. The [`KohakuError`] gets automatically converted to a [`HttpResponse`]
 ///
 /// # Errors
-/// Please see [`KohakuError::details`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
+/// Please see [`KohakuError`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
 async fn login(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
     let api_key = extract_key(&req);
     if api_key.is_none() {
@@ -69,14 +69,12 @@ async fn login(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
 /// - [`Err`] : A [`KohakuError`] based on failed operations. The [`KohakuError`] gets automatically converted to a [`HttpResponse`]
 ///
 /// # Errors
-/// Please see [`KohakuError::details`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
+/// Please see [`KohakuError`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
 async fn refresh(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
     let claims = check_authorization_token(&req, None).await?;
     // Check if token is a refresh token
     if claims.token_type != TokenType::Refresh {
-        return Err(KohakuError::ValidationError(
-            "Invalid token type".to_string(),
-        ));
+        return Err(KohakuError::Forbidden("Invalid token type".to_string()));
     }
 
     // Valid, not blacklisted refresh token => Create new access token
@@ -111,7 +109,7 @@ async fn refresh(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
 /// - [`Err`] : A [`KohakuError`] based on failed operations. The [`KohakuError`] gets automatically converted to a [`HttpResponse`]
 ///
 /// # Errors
-/// Please see [`KohakuError::details`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
+/// Please see [`KohakuError`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
 async fn create(
     req: HttpRequest,
     body: web::Json<CreateKeyRequest>,
@@ -158,7 +156,7 @@ async fn create(
 /// - [`Err`] : A [`KohakuError`] based on failed operations. The [`KohakuError`] gets automatically converted to a [`HttpResponse`]
 ///
 /// # Errors
-/// Please see [`KohakuError::details`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
+/// Please see [`KohakuError`] for the mapping of [`KohakuError`] to [`actix_web::http::StatusCode`]
 async fn revoke(
     req: HttpRequest,
     body: web::Json<RevokeKeyRequest>,
