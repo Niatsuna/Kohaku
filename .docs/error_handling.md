@@ -44,4 +44,5 @@ The following table shows what kind of errors are currently available on the ser
 | `TaskNotFound` | Scheduled task cannot be found (Sync issue) | `500` |
 | `TaskExecutionError` | Failed to execute the given task, an error occured during the task | `500` |
 | `TaskTimeout` | Scheduled task timeout | `500` |
+| `WebsockertError` | Indicating some occuring error in the websocket communication module (e.g. manager failed to start) | `500` |
 | `ExternalServiceError` | External service (e.g. another API) returned an error | `500` |
