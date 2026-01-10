@@ -1,7 +1,7 @@
 use std::{error::Error, sync::Arc};
 
 use tokio::sync::{Mutex, OnceCell};
-use tokio_cron_scheduler::{job::job_data::Uuid, Job, JobScheduler};
+use tokio_cron_scheduler::{job::job_data::Uuid, Job, JobScheduler, JobSchedulerError};
 
 pub mod tasks;
 use crate::utils::{
@@ -42,19 +42,13 @@ impl Scheduler {
                 })
             }
         })
-        .map_err(|e| KohakuError::OperationError {
-            operation: "Scheduler-Job-Creation".to_string(),
-            source: Box::new(e),
-        })?;
+        .map_err(KohakuError::SchedulerError)?;
 
         let scheduler = self.scheduler.lock().await;
         let uuid = scheduler
             .add(job)
             .await
-            .map_err(|e| KohakuError::OperationError {
-                operation: "Scheduler-Job-Add".to_string(),
-                source: Box::new(e),
-            })?;
+            .map_err(KohakuError::SchedulerError)?;
         Ok(uuid.into())
     }
 
@@ -64,21 +58,20 @@ impl Scheduler {
         scheduler
             .start()
             .await
-            .map_err(|e| KohakuError::OperationError {
-                operation: "Scheduler-Start".to_string(),
-                source: Box::new(e),
-            })?;
+            .map_err(KohakuError::SchedulerError)?;
         Ok(())
     }
 }
 
 pub async fn init_scheduler() -> Result<(), KohakuError> {
-    let scheduler = Arc::new(Scheduler::new().await.map_err(|e| {
-        KohakuError::InternalServerError(format!("Scheduler couldn't be created: {e}"))
-    })?);
-    SCHEDULER.set(scheduler).map_err(|_| {
-        KohakuError::InternalServerError("Scheduler already initialized".to_string())
-    })?;
+    let scheduler = Arc::new(
+        Scheduler::new()
+            .await
+            .map_err(|_| KohakuError::SchedulerError(JobSchedulerError::CantInit))?,
+    );
+    SCHEDULER
+        .set(scheduler)
+        .map_err(|_| KohakuError::SchedulerError(JobSchedulerError::CantInit))?;
     Ok(())
 }
 

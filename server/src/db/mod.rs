@@ -53,7 +53,7 @@ pub fn migrate() -> Result<(), KohakuError> {
     let mut conn = get_connection()?;
     let mig = conn
         .run_pending_migrations(MIGRATIONS)
-        .map_err(|e| KohakuError::InternalServerError(format!("Migration failed: {}", e)))?;
+        .map_err(|e| KohakuError::ExternalServiceError(format!("Migration failed: {}", e)))?;
     info!("Migrations applied! (Count: {})", mig.len());
     Ok(())
 }

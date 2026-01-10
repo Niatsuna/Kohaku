@@ -135,7 +135,7 @@ impl WsConnectionManager {
 
         if let Some(sender) = connections.get(key_id) {
             sender.send(Message::Text(content.into())).map_err(|e| {
-                KohakuError::InternalServerError(format!(
+                KohakuError::WebsocketError(format!(
                     "Failed to send to client with key_id {} : {}",
                     key_id, e
                 ))
@@ -161,9 +161,7 @@ impl WsConnectionManager {
 pub fn init_manager() -> Result<(), KohakuError> {
     let service = Arc::new(WsConnectionManager::new());
     WS_CONNECTION_MANAGER.set(service).map_err(|_| {
-        KohakuError::InternalServerError(
-            "Websocket Connection Manager already initialized".to_string(),
-        )
+        KohakuError::WebsocketError("Websocket Connection Manager already initialized".to_string())
     })?;
     Ok(())
 }
@@ -177,7 +175,7 @@ pub fn init_manager() -> Result<(), KohakuError> {
 pub fn get_manager() -> Result<Arc<WsConnectionManager>, KohakuError> {
     let service = WS_CONNECTION_MANAGER.get();
     if service.is_none() {
-        return Err(KohakuError::InternalServerError(
+        return Err(KohakuError::WebsocketError(
             "Websocket Connection Manager not initialized - call init_manager first!".to_string(),
         ));
     }

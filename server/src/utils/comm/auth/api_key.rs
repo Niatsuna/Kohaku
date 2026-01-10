@@ -75,7 +75,7 @@ pub fn hash_key(key: &str) -> Result<String, KohakuError> {
     let argon2 = Argon2::default();
     let hash = argon2
         .hash_password(key.as_bytes(), &salt)
-        .map_err(|e| KohakuError::InternalServerError(e.to_string()))?;
+        .map_err(|e| KohakuError::AuthenticationError(e.to_string()))?;
     Ok(hash.to_string())
 }
 
@@ -101,13 +101,13 @@ pub fn hash_key(key: &str) -> Result<String, KohakuError> {
 /// ```
 pub fn verify_key(key: &str, hash: &str) -> Result<bool, KohakuError> {
     let parsed_hash =
-        PasswordHash::new(hash).map_err(|e| KohakuError::InternalServerError(e.to_string()))?;
+        PasswordHash::new(hash).map_err(|e| KohakuError::AuthenticationError(e.to_string()))?;
     let argon2 = Argon2::default();
 
     match argon2.verify_password(key.as_bytes(), &parsed_hash) {
         Ok(()) => Ok(true),
         Err(argon2::password_hash::Error::Password) => Ok(false),
-        Err(e) => Err(KohakuError::InternalServerError(e.to_string())),
+        Err(e) => Err(KohakuError::ValidationError(e.to_string())),
     }
 }
 
