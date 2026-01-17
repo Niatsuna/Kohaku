@@ -41,6 +41,7 @@ The following table shows what kind of errors are currently available on the ser
 | `DatabaseConnectionError` | Database connection is either invalid, closed or failed; Wraps: [`diesel::r2d2::PoolError`](https://docs.diesel.rs/master/diesel/r2d2/type.PoolError.html) | `500` | [Database Connection](../server/src/db/mod.rs#L47)
 | `DatabaseQueryError` | Database query failed to execute; Wraps: [`diesel::result::Error`](https://docs.diesel.rs/2.1.x/diesel/result/enum.Error.html) | `500` | [Storing API keys in Database](../server/src/utils/comm/auth/models.rs#L80)
 | `SchedulerError` | Initialization or task scheduling failed; Wraps: [`tokio_cron_scheduler::JobSchedulerError`](https://docs.rs/tokio-cron-scheduler/latest/tokio_cron_scheduler/enum.JobSchedulerError.html) | `500` | [Scheduler Start](../server/src/utils/scheduler/mod.rs#L56)
+| `TaskBuilderError` | Error occured during the process of building the task | `500` |
 | `TaskNotFound` | Scheduled task cannot be found (Sync issue) | `500` |
 | `TaskExecutionError` | Failed to execute the given task, an error occured during the task | `500` |
 | `TaskTimeout` | Scheduled task timeout | `500` |

@@ -39,6 +39,9 @@ pub enum KohakuError {
     #[error("Scheduler error: {0}")]
     SchedulerError(#[from] tokio_cron_scheduler::JobSchedulerError),
 
+    #[error("Task Builder Error: {0}")]
+    TaskBuilderError(String),
+
     #[error("Task not found: {0}")]
     TaskNotFound(String),
 
@@ -79,6 +82,7 @@ impl KohakuError {
                 &t3.clone()
             }
             Self::SchedulerError(_) => "SCHEDULER_ERROR",
+            Self::TaskBuilderError(_) => "TASK_BUILDER_ERROR",
             Self::TaskNotFound(_) => "TASK_NOT_FOUND",
             Self::TaskExecutionError(_) => "TASK_EXECUTION_ERROR",
             Self::TaskTimeout(_) => "TASK_TIMEOUT",
