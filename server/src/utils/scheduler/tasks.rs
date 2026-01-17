@@ -1,10 +1,18 @@
-use std::{future::Future, pin::Pin, sync::{Arc, atomic::{AtomicI32, Ordering}}};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicI32, Ordering},
+        Arc,
+    },
+};
 
 use tracing::{error, info};
 
 use crate::utils::error::KohakuError;
 
-pub type TaskFn = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<(), KohakuError>> + Send>> + Send + Sync>;
+pub type TaskFn =
+    Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<(), KohakuError>> + Send>> + Send + Sync>;
 
 /// Scheduled Task that executes the given function on the given schedule.
 pub struct Task {
@@ -15,7 +23,7 @@ pub struct Task {
     /// Counter how often this task should be executed until removal (-1 = infinite)
     pub remaining_runs: Arc<AtomicI32>,
     /// Actual function to execute on given schedule
-    pub handler: TaskFn
+    pub handler: TaskFn,
 }
 
 impl Task {
@@ -24,7 +32,7 @@ impl Task {
     }
 
     /// Decrements and checks the current lifespan of the given task.
-    /// 
+    ///
     /// # Returns:
     /// - [`bool`] indicating if the Task should be removed or not. Please note that a set lifespan of `-1` will be counted as `infinite` and will result in no removal.
     pub fn check_lifespan(&self) -> bool {
@@ -44,7 +52,7 @@ pub struct TaskBuilder {
     name: String,
     cron: Option<String>,
     runs: i32,
-    handler: Option<TaskFn>
+    handler: Option<TaskFn>,
 }
 
 impl TaskBuilder {
@@ -53,7 +61,7 @@ impl TaskBuilder {
             name: name.into(),
             cron: None,
             runs: -1,
-            handler: None
+            handler: None,
         }
     }
 
@@ -76,8 +84,8 @@ impl TaskBuilder {
     }
 
     /// Setting the function that should be exectued on schedule
-    pub fn handler<F, Fut>(mut self, f: F) -> Self 
-    where 
+    pub fn handler<F, Fut>(mut self, f: F) -> Self
+    where
         F: Fn() -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<(), KohakuError>> + Send + 'static,
     {
@@ -86,22 +94,26 @@ impl TaskBuilder {
     }
 
     /// Builds the given task.
-    /// 
+    ///
     /// Requirement are `cron` and `handler`.
-    /// 
+    ///
     /// # Returns
     /// A [`Result`] which is either:
     /// - [`Ok`] : Constructed [`Task`]
     /// - [`Err`] : A [`KohakuError::TaskBuilderError`] if either `cron` or `handler` were not set
     pub fn build(self) -> Result<Task, KohakuError> {
-        let cron = self.cron.ok_or(KohakuError::TaskBuilderError("Schedule (cron) is required".to_string()))?;
-        let handler = self.handler.ok_or(KohakuError::TaskBuilderError("Handler function is required".to_string()))?;
+        let cron = self.cron.ok_or(KohakuError::TaskBuilderError(
+            "Schedule (cron) is required".to_string(),
+        ))?;
+        let handler = self.handler.ok_or(KohakuError::TaskBuilderError(
+            "Handler function is required".to_string(),
+        ))?;
 
         Ok(Task {
             name: self.name,
             cron,
             remaining_runs: Arc::new(AtomicI32::new(self.runs)),
-            handler
+            handler,
         })
     }
 }
@@ -113,7 +125,7 @@ pub trait Runnable: Send + Sync {
 impl Runnable for Task {
     /// Runs the scheduled tasks function.
     /// Result will be logged using [`tracing`] on the server side.
-    /// 
+    ///
     /// # Returns
     /// A [`Result`] which is either:
     /// - [`Ok`] : Task executed without any errors
@@ -123,7 +135,7 @@ impl Runnable for Task {
             Ok(_) => {
                 info!("[ Task - {} ] Execution finished!", self.name);
                 Ok(())
-            },
+            }
             Err(e) => {
                 error!("[ Task - {} ] Failure detected: {}", self.name, e);
                 Err(KohakuError::TaskExecutionError(Box::new(e)))
