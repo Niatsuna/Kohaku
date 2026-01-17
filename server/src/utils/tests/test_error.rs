@@ -27,6 +27,7 @@ use crate::utils::error::KohakuError;
     KohakuError::SchedulerError(tokio_cron_scheduler::JobSchedulerError::CantInit),
     "SCHEDULER_ERROR"
 )]
+#[case(KohakuError::TaskBuilderError("".into()), "TASK_BUILDER_ERROR")]
 #[case(KohakuError::TaskNotFound("".into()), "TASK_NOT_FOUND")]
 #[case(KohakuError::TaskExecutionError(Box::new(KohakuError::BadRequest("".into()))), "TASK_EXECUTION_ERROR")]
 #[case(KohakuError::TaskTimeout("".into()), "TASK_TIMEOUT")]
@@ -55,6 +56,7 @@ fn test_kohakuerror_error_type(#[case] error: KohakuError, #[case] expected_kind
     KohakuError::SchedulerError(tokio_cron_scheduler::JobSchedulerError::CantInit),
     StatusCode::INTERNAL_SERVER_ERROR
 )]
+#[case(KohakuError::TaskBuilderError("".into()), StatusCode::INTERNAL_SERVER_ERROR)]
 #[case(KohakuError::TaskNotFound("".into()), StatusCode::INTERNAL_SERVER_ERROR)]
 #[case(KohakuError::TaskExecutionError(Box::new(KohakuError::BadRequest("".into()))), StatusCode::INTERNAL_SERVER_ERROR)]
 #[case(KohakuError::TaskTimeout("".into()), StatusCode::INTERNAL_SERVER_ERROR)]
@@ -84,6 +86,7 @@ struct ErrorJson {
 #[case(KohakuError::AuthenticationError("".into()))]
 #[case(KohakuError::DatabaseQueryError(diesel::result::Error::NotFound))]
 #[case(KohakuError::SchedulerError(tokio_cron_scheduler::JobSchedulerError::CantInit))]
+#[case(KohakuError::TaskBuilderError("".into()))]
 #[case(KohakuError::TaskNotFound("".into()))]
 #[case(KohakuError::TaskExecutionError(Box::new(KohakuError::BadRequest("".into()))))]
 #[case(KohakuError::TaskTimeout("".into()))]
