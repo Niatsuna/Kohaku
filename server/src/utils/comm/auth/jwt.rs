@@ -91,7 +91,7 @@ impl JWTService {
 
         // Create token
         encode(&Header::default(), &claims, &self.encoding_key)
-            .map_err(|e| KohakuError::InternalServerError(e.to_string()))
+            .map_err(|e| KohakuError::AuthenticationError(e.to_string()))
     }
 
     /// Helper function to generate the bootstrap token. Calls [`JWTService::create_token`].
@@ -233,7 +233,7 @@ impl JWTService {
 pub fn init_jwtservice(encryption_key: &[u8]) -> Result<(), KohakuError> {
     let service = Arc::new(JWTService::new(encryption_key));
     JWT_SERVICE.set(service).map_err(|_| {
-        KohakuError::InternalServerError("JWTService already initialized".to_string())
+        KohakuError::AuthenticationError("JWTService already initialized".to_string())
     })?;
     Ok(())
 }
@@ -247,7 +247,7 @@ pub fn init_jwtservice(encryption_key: &[u8]) -> Result<(), KohakuError> {
 pub fn get_jwtservice() -> Result<Arc<JWTService>, KohakuError> {
     let service = JWT_SERVICE.get();
     if service.is_none() {
-        return Err(KohakuError::InternalServerError(
+        return Err(KohakuError::AuthenticationError(
             "JWTService not initialized - call init_jwtservice first!".to_string(),
         ));
     }

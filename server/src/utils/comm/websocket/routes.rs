@@ -28,8 +28,8 @@ pub async fn ws_handler(
         key_id: verified_key.id,
     };
 
-    let (response, session, msg_stream) = actix_ws::handle(&req, stream)
-        .map_err(|e| KohakuError::InternalServerError(e.to_string()))?;
+    let (response, session, msg_stream) =
+        actix_ws::handle(&req, stream).map_err(|e| KohakuError::WebsocketError(e.to_string()))?;
 
     let manager = get_manager()?;
     let conn = manager
@@ -42,7 +42,7 @@ pub async fn ws_handler(
         );
         conn_.run(manager);
     } else {
-        return Err(KohakuError::InternalServerError(
+        return Err(KohakuError::WebsocketError(
             "Couldn't create WebSocketConnection!".to_string(),
         ));
     }

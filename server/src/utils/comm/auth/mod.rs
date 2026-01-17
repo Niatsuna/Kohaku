@@ -87,7 +87,7 @@ pub async fn check_authorization_token(
             .iter()
             .all(|scope| claims.scopes.contains(&scope.to_string()));
     if !permission {
-        return Err(KohakuError::Unauthorized(
+        return Err(KohakuError::Forbidden(
             "API Key has not the required permissions!".to_string(),
         ));
     }

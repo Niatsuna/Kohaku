@@ -101,7 +101,7 @@ pub async fn create_apikey(
     diesel::insert_into(schema::api_keys::table)
         .values(&new_key)
         .get_result(&mut conn)
-        .map_err(KohakuError::DatabaseError)
+        .map_err(KohakuError::DatabaseQueryError)
 }
 
 /// Gets an entry for an identifieable API key in the database
@@ -134,7 +134,9 @@ pub async fn get_apikey(
         query = FilterDsl::filter(query, key_prefix.eq(kp));
     }
 
-    query.load(&mut conn).map_err(KohakuError::DatabaseError)
+    query
+        .load(&mut conn)
+        .map_err(KohakuError::DatabaseQueryError)
 }
 
 /// Removes an entry representing an API key from the database
@@ -168,7 +170,7 @@ pub async fn delete_apikey(
 
     query
         .execute(&mut conn)
-        .map_err(KohakuError::DatabaseError)?;
+        .map_err(KohakuError::DatabaseQueryError)?;
     Ok(())
 }
 
