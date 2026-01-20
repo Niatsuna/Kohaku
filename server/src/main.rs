@@ -47,8 +47,9 @@ async fn main() -> std::io::Result<()> {
         let scheduler = get_scheduler().await;
         if scheduler.start().await.is_err() {
             error!("Couldn't start scheduler!");
+        } else {
+            info!("Scheduler started!");
         }
-        info!("Scheduler started!");
     }
 
     // Start JWT Service
