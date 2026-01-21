@@ -39,12 +39,12 @@ _(Source: [`tokio_cron_scheduler`](https://github.com/mvniekerk/tokio-cron-sched
 | Field | Required | Description | Method |
 | ----- | -------- | ----------- | ------ |
 | `name` | Yes | Logging purposes | --
-| `cron` | Yes | Schedule in which the task should be executed | [`schedule(cron : &str)`]()
-| `handler` | Yes | Actual function to be executed | [`handler(f : TaskFn)`]()
-| `remaining_runs` | No | How often the task should be executed, if not set default is infinite (indicated by `-1`) | [`run_once()`]() or [`run_times(times: i32)`]()
+| `cron` | Yes | Schedule in which the task should be executed | [`schedule(cron : &str)`](../server/src/utils/scheduler/tasks.rs#L71)
+| `handler` | Yes | Actual function to be executed | [`handler(f : TaskFn)`](../server/src/utils/scheduler/tasks.rs#L89)
+| `remaining_runs` | No | How often the task should be executed, if not set default is infinite (indicated by `-1`) | [`run_once()`](../server/src/utils/scheduler/tasks.rs#L77) or [`run_times(times: i32)`](../server/src/utils/scheduler/tasks.rs#L83)
 
-The construction can be finished via `.build()` at the end and if successful, will return the resulting [`Task`]() struct.
-If the construction fails, a [`KohakuError::TaskBuilderError`]() will be returned.
+The construction can be finished via `.build()` at the end and if successful, will return the resulting [`Task`](../server/src/utils/scheduler/tasks.rs#L18) struct.
+If the construction fails, a `KohakuError::TaskBuilderError` will be returned.
 
 The task can then be scheduled via `scheduler.add_task(task).await`.
 
