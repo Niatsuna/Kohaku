@@ -2,6 +2,7 @@ use std::{error::Error, sync::Arc};
 
 use tokio::sync::{Mutex, OnceCell};
 use tokio_cron_scheduler::{job::job_data::Uuid, Job, JobScheduler, JobSchedulerError};
+use tracing::info;
 
 pub mod tasks;
 use crate::utils::{
@@ -22,10 +23,7 @@ impl Scheduler {
     }
 
     /// Schedule a given task for the scheduler
-    pub async fn add_task<T>(&self, task: T) -> Result<Uuid, KohakuError>
-    where
-        T: Runnable + std::ops::Deref<Target = Task> + 'static + Send + Sync,
-    {
+    pub async fn add_task(&self, task: Task) -> Result<Uuid, KohakuError> {
         let task = Arc::new(task);
         let job = Job::new_async(&task.cron, {
             let task = Arc::clone(&task);
@@ -33,10 +31,19 @@ impl Scheduler {
                 let task = Arc::clone(&task);
                 Box::pin(async move {
                     // Run task
-                    task.run().await;
+                    let res = task.run().await;
 
-                    // Remove task if it should only run once
-                    if task.run_once {
+                    // Remove task if its lifespan is used up
+                    if res.is_err() || task.check_lifespan() {
+                        let reason = if res.is_err() {
+                            "Failure detected"
+                        } else {
+                            "Lifespan depleted"
+                        };
+                        info!(
+                            "[ Scheduler ] Removed task `{}` from schedule. Reason: {}",
+                            task.name, reason
+                        );
                         scheduler.remove(&uuid).await.unwrap();
                     }
                 })

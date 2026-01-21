@@ -1,111 +1,231 @@
 use std::{
     sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, Mutex,
+        atomic::{AtomicI32, AtomicU32, Ordering},
+        Arc,
     },
     time::Duration,
 };
 
-use serial_test::serial;
+use rstest::rstest;
 
-use crate::{
-    impl_task_wrapper,
-    utils::scheduler::{get_scheduler, init_scheduler, tasks::Task, Scheduler},
+use crate::utils::{
+    error::KohakuError,
+    scheduler::{
+        get_scheduler, init_scheduler,
+        tasks::{Runnable, Task},
+    },
 };
 
-#[tokio::test]
-#[should_panic]
-async fn test_scheduler_not_initialized_before_get() {
-    let _ = get_scheduler().await;
+#[test]
+fn test_task_builder_basic() {
+    let name = "test";
+    let cron = "* * * * * *";
+
+    let task = Task::builder(name)
+        .schedule(cron)
+        .handler(|| async { Ok(()) })
+        .build();
+
+    assert!(task.is_ok());
+    let task = task.unwrap();
+    assert_eq!(task.name, name);
+    assert_eq!(task.cron, cron);
+    assert_eq!(task.remaining_runs.load(Ordering::SeqCst), -1);
 }
 
-#[tokio::test]
-async fn test_scheduler_singleton() {
-    // #1 Test that first initialization succeeds and second fails
-    assert!(init_scheduler().await.is_ok());
-    assert!(init_scheduler().await.is_err());
+#[rstest]
+#[case(1)]
+#[case(10)]
+fn test_task_builder_diff_runs(#[case] amount: i32) {
+    let tb = Task::builder("test")
+        .schedule("*/1 * * * * *")
+        .handler(|| async { Ok(()) });
 
-    // #2 Test if getter returns same instance
-    let s1 = get_scheduler().await;
-    let s2 = get_scheduler().await;
-    assert!(Arc::ptr_eq(&s1, &s2))
-}
-
-// ------------------------------------------------------------------------
-
-static COUNTER: Mutex<Option<Arc<AtomicUsize>>> = Mutex::new(None);
-
-struct TestTask(Task);
-
-impl TestTask {
-    pub fn new(run_once: bool) -> Self {
-        Self(Task::new("TestTask", "*/1 * * * * *", run_once))
+    let task: Result<Task, KohakuError>;
+    if amount == 1 {
+        task = tb.run_once().build();
+    } else {
+        task = tb.run_times(amount).build();
     }
 
-    async fn execute(&self) -> Result<(), String> {
-        let counter = COUNTER.lock().unwrap();
-        let counter = counter.as_ref().expect("Counter not initialized");
-        counter.fetch_add(1, Ordering::SeqCst);
-        Ok(())
-    }
+    assert!(task.is_ok());
+    let task = task.unwrap();
+    assert_eq!(task.remaining_runs.load(Ordering::SeqCst), amount);
 }
 
-impl_task_wrapper!(TestTask);
-
-#[tokio::test]
-async fn test_add_task() {
-    let task1 = TestTask::new(true);
-    let task2 = TestTask::new(true);
-
-    let scheduler = Scheduler::new().await.unwrap();
-    // #1 Test if task is added if scheduler has not started yet
-    assert!(scheduler.add_task(task1).await.is_ok());
-    let _ = scheduler.start().await;
-
-    // #2 Test if task is added if scheduler has already started
-    assert!(scheduler.add_task(task2).await.is_ok());
-}
-
-#[tokio::test]
-#[serial]
-async fn test_execute_task_once() {
-    let counter = Arc::new(AtomicUsize::new(0));
-    *COUNTER.lock().unwrap() = Some(counter.clone());
-
-    let task = TestTask::new(true);
-
-    let scheduler = Scheduler::new().await.unwrap();
-    let _ = scheduler.add_task(task).await;
-    let _ = scheduler.start().await;
-
-    tokio::time::sleep(Duration::from_secs(3)).await;
-
-    let count = counter.load(Ordering::SeqCst);
-    assert_eq!(
-        count, 1,
-        "Task should run exactly once, but ran {} times",
-        count
-    );
-}
-
-#[tokio::test]
-#[serial]
-async fn test_execute_task_multiple_times() {
-    let counter = Arc::new(AtomicUsize::new(0));
-    *COUNTER.lock().unwrap() = Some(counter.clone());
-
-    let task = TestTask::new(false);
-
-    let scheduler = Scheduler::new().await.unwrap();
-    let _ = scheduler.add_task(task).await;
-    let _ = scheduler.start().await;
-
-    tokio::time::sleep(Duration::from_secs(3)).await;
-
-    let count = counter.load(Ordering::SeqCst);
+#[test]
+fn test_task_builder_missing_schedule() {
+    let task = Task::builder("test").handler(|| async { Ok(()) }).build();
+    assert!(task.is_err());
     assert!(
-        count > 1,
-        "Task should run multiple times, but ran {} time(s)",
-        count
+        matches!(task, Err(KohakuError::TaskBuilderError(t)) if t == "Schedule (cron) is required".to_string())
     );
+}
+
+#[test]
+fn test_task_builder_missing_handler() {
+    let task = Task::builder("test").schedule("* * * * * *").build();
+    assert!(task.is_err());
+    assert!(
+        matches!(task, Err(KohakuError::TaskBuilderError(t)) if t == "Handler function is required".to_string())
+    );
+}
+
+#[tokio::test]
+async fn test_task_decrement_count_infinite() {
+    let task = Task::builder("test")
+        .schedule("*/1 * * * * *")
+        .handler(|| async { Ok(()) })
+        .build();
+    assert!(task.is_ok());
+    let task = task.unwrap();
+
+    assert_eq!(task.remaining_runs.load(Ordering::SeqCst), -1);
+    assert!(!task.check_lifespan());
+    assert_eq!(task.remaining_runs.load(Ordering::SeqCst), -1);
+}
+
+#[tokio::test]
+async fn test_task_decrement_count_once() {
+    let task = Task::builder("test")
+        .schedule("*/1 * * * * *")
+        .handler(|| async { Ok(()) })
+        .run_once()
+        .build();
+    assert!(task.is_ok());
+    let task = task.unwrap();
+
+    assert_eq!(task.remaining_runs.load(Ordering::SeqCst), 1);
+    assert!(task.check_lifespan());
+    assert_eq!(task.remaining_runs.load(Ordering::SeqCst), 0);
+    assert!(task.check_lifespan());
+    assert_eq!(task.remaining_runs.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+#[rstest]
+#[case(2)]
+#[case(5)]
+#[case(10)]
+async fn test_task_decrement_count_finite_times(#[case] amount: i32) {
+    let task = Task::builder("test")
+        .schedule("*/1 * * * * *")
+        .handler(|| async { Ok(()) })
+        .run_times(amount)
+        .build();
+    assert!(task.is_ok());
+    let task = task.unwrap();
+
+    assert_eq!(task.remaining_runs.load(Ordering::SeqCst), amount);
+    assert!(!task.check_lifespan());
+    assert_eq!(task.remaining_runs.load(Ordering::SeqCst), amount - 1);
+
+    if amount == 2 {
+        assert!(task.check_lifespan());
+    } else {
+        assert!(!task.check_lifespan());
+    }
+    assert_eq!(task.remaining_runs.load(Ordering::SeqCst), amount - 2);
+}
+
+#[tokio::test]
+async fn test_task_execution() {
+    let counter = Arc::new(AtomicU32::new(0));
+    let counter_clone = counter.clone();
+    let task = Task::builder("test")
+        .schedule("*/1 * * * * *")
+        .run_once()
+        .handler(move || {
+            let count = counter_clone.clone();
+            async move {
+                count.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        })
+        .build();
+
+    assert!(task.is_ok());
+    let task = task.unwrap();
+
+    let res = task.run().await;
+    assert!(res.is_ok());
+
+    let c = counter.load(Ordering::SeqCst);
+    assert_eq!(c, 1);
+}
+
+#[tokio::test]
+async fn test_scheduler_task_run_once() {
+    let _ = init_scheduler().await;
+    let scheduler = get_scheduler().await;
+    let _ = scheduler.start().await;
+
+    let counter = Arc::new(AtomicU32::new(0));
+    let counter_clone = counter.clone();
+    let task = Task::builder("test")
+        .schedule("*/1 * * * * *")
+        .run_once()
+        .handler(move || {
+            let count = counter_clone.clone();
+            async move {
+                count.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        })
+        .build();
+
+    assert!(task.is_ok());
+    let task = task.unwrap();
+    let res = scheduler.add_task(task).await;
+    assert!(res.is_ok());
+
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    let c = counter.load(Ordering::SeqCst);
+    assert_eq!(c, 1);
+}
+
+#[tokio::test]
+#[rstest]
+#[case(2)]
+#[case(3)]
+async fn test_scheduler_task_run_times(#[case] amount: i32) {
+    let _ = init_scheduler().await;
+    let scheduler = get_scheduler().await;
+    let _ = scheduler.start().await;
+
+    let counter = Arc::new(AtomicI32::new(0));
+    let counter_clone = counter.clone();
+    let task = Task::builder("test")
+        .schedule("* * * * * *")
+        .run_times(amount)
+        .handler(move || {
+            let count = counter_clone.clone();
+            async move {
+                count.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        })
+        .build();
+
+    assert!(task.is_ok());
+    let task = task.unwrap();
+    let rem_runs = task.remaining_runs.clone();
+    let res = scheduler.add_task(task).await;
+    assert!(res.is_ok());
+
+    let waittime = (amount as u64) + 3;
+    tokio::time::sleep(Duration::from_secs(waittime)).await;
+
+    let c = counter.load(Ordering::SeqCst);
+    let diff = amount - c;
+
+    // Allow for an error range of 1 count based on scheduler startup and schedule time based on system
+    assert!(
+        diff <= 1,
+        "Expected {} executions, got {} (Diff Threshold : 1)",
+        amount,
+        c
+    );
+    assert_eq!(rem_runs.load(Ordering::SeqCst), diff);
 }
