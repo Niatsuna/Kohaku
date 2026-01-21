@@ -227,5 +227,5 @@ async fn test_scheduler_task_run_times(#[case] amount: i32) {
         amount,
         c
     );
-    assert_eq!(rem_runs.load(Ordering::SeqCst), 0);
+    assert_eq!(rem_runs.load(Ordering::SeqCst), diff);
 }
