@@ -40,6 +40,8 @@ impl Task {
 
         if current == -1 {
             return false;
+        } else if current == 0 {
+            return true;
         }
 
         let new_value = self.remaining_runs.fetch_sub(1, Ordering::SeqCst) - 1;
