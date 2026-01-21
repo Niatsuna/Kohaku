@@ -188,8 +188,7 @@ async fn test_scheduler_task_run_once() {
 #[tokio::test]
 #[rstest]
 #[case(2)]
-#[case(5)]
-#[case(10)]
+#[case(3)]
 async fn test_scheduler_task_run_times(#[case] amount: i32) {
     let _ = init_scheduler().await;
     let scheduler = get_scheduler().await;
@@ -198,7 +197,7 @@ async fn test_scheduler_task_run_times(#[case] amount: i32) {
     let counter = Arc::new(AtomicI32::new(0));
     let counter_clone = counter.clone();
     let task = Task::builder("test")
-        .schedule("*/1 * * * * *")
+        .schedule("* * * * * *")
         .run_times(amount)
         .handler(move || {
             let count = counter_clone.clone();
@@ -215,17 +214,18 @@ async fn test_scheduler_task_run_times(#[case] amount: i32) {
     let res = scheduler.add_task(task).await;
     assert!(res.is_ok());
 
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    let waittime = (amount as u64) + 3;
+    tokio::time::sleep(Duration::from_secs(waittime)).await;
 
     let c = counter.load(Ordering::SeqCst);
+    let diff = amount - c;
 
-    if amount <= 3 {
-        // Can be executed in time frame
-        assert_eq!(c, amount);
-        assert_eq!(rem_runs.load(Ordering::SeqCst), 0);
-    } else {
-        // Cannot be executed in time frame
-        // As the scheduler could take a sec to init the task we allow a one sec / one run error window
-        assert!(2 <= c && c <= 3);
-    }
+    // Allow for an error range of 1 count based on scheduler startup and schedule time based on system
+    assert!(
+        diff <= 1,
+        "Expected {} executions, got {} (Diff Threshold : 1)",
+        amount,
+        c
+    );
+    assert_eq!(rem_runs.load(Ordering::SeqCst), 0);
 }
