@@ -7,6 +7,7 @@ use actix_ws::{Message, MessageStream, Session};
 use serde::Serialize;
 use tokio::sync::{mpsc::UnboundedSender, OnceCell};
 use tracing::{error, info};
+use uuid::Uuid;
 
 use crate::utils::{
     comm::websocket::connection::{WsClientInfo, WsConnection},
@@ -16,13 +17,15 @@ use crate::utils::{
 static WS_CONNECTION_MANAGER: OnceCell<Arc<WsConnectionManager>> = OnceCell::const_new();
 
 pub struct WsConnectionManager {
-    connections: RwLock<HashMap<i32, UnboundedSender<Message>>>,
+    connections: RwLock<HashMap<i32, (UnboundedSender<Message>, Uuid, Session)>>,
+    uuids: RwLock<HashMap<Uuid, i32>>,
 }
 
 impl WsConnectionManager {
     pub fn new() -> Self {
         Self {
             connections: RwLock::new(HashMap::new()),
+            uuids: RwLock::new(HashMap::new()),
         }
     }
 
@@ -48,10 +51,26 @@ impl WsConnectionManager {
         if self.connections.read().unwrap().contains_key(&key_id) {
             return None;
         }
-        let conn = WsConnection::new(info, session, stream);
+        let conn = WsConnection::new(info.clone(), session.clone(), stream);
         let sender = conn.server_tx.clone();
-        self.connections.write().unwrap().insert(key_id, sender);
+        self.connections
+            .write()
+            .unwrap()
+            .insert(key_id, (sender, info.clone().client_id, session));
+        self.uuids.write().unwrap().insert(info.client_id, key_id);
         Some(conn)
+    }
+
+    /// Checks if an active connection is being managed by identifying it with its API key id
+    pub fn check_connection_by_key_id(&self, key_id: &i32) -> bool {
+        let connections = self.connections.read().unwrap();
+        connections.contains_key(key_id)
+    }
+
+    /// Checks if an active connection is being managed by identfying it with its clients uuid
+    pub fn check_connection_by_uuid(&self, uuid: &Uuid) -> bool {
+        let uuids = self.uuids.read().unwrap();
+        uuids.contains_key(uuid)
     }
 
     /// Removes a connection from the manager, making it unable to receive messages from the server
@@ -59,6 +78,16 @@ impl WsConnectionManager {
     /// # Parameters
     /// - `key_id` - API key identifier for connections in the manager
     pub async fn remove_connection(&self, key_id: &i32) {
+        let connections = self.connections.read().unwrap();
+        let res = connections.get(&key_id);
+        if let Some((_, uuid, session)) = res {
+            info!(
+                "[WS - Removal] Server issued closure of connection with {}. Closing session!",
+                uuid
+            );
+            let _ = session.clone().close(None).await;
+            self.uuids.write().unwrap().remove(uuid);
+        }
         self.connections.write().unwrap().remove(key_id);
     }
 
@@ -133,7 +162,7 @@ impl WsConnectionManager {
         let connections = self.connections.read().unwrap().clone();
         let content = serde_json::to_string(&payload).unwrap();
 
-        if let Some(sender) = connections.get(key_id) {
+        if let Some((sender, _, _)) = connections.get(key_id) {
             sender.send(Message::Text(content.into())).map_err(|e| {
                 KohakuError::WebsocketError(format!(
                     "Failed to send to client with key_id {} : {}",
