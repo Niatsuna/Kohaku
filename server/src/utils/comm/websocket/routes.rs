@@ -56,8 +56,8 @@ pub async fn ws_handler(
         .await;
     if let Some(conn_) = conn {
         info!(
-            "[WS - Conn] Established new connection {} for key with id {}",
-            info.client_id, verified_key.id
+            "[WS - Conn] Established new connection {} for key with id {} ({})",
+            info.client_id, info.key_id, info.owner
         );
 
         let payload = json!({ "Bearer" : client_id });
