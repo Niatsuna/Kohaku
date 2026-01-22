@@ -2,14 +2,17 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use tracing::info;
 
 use crate::utils::{
-    comm::auth::{
-        api_key::{extract_prefix, generate_key, hash_key, verify_key},
-        check_authorization_key, check_authorization_token, extract_key,
-        jwt::get_jwtservice,
-        models::{
-            create_apikey, delete_apikey, get_apikey, CreateKeyRequest, CreateKeyResponse,
-            RevokeKeyRequest, TokenResponse, TokenType,
+    comm::{
+        auth::{
+            api_key::{extract_prefix, generate_key, hash_key, verify_key},
+            check_authorization_key, check_authorization_token, extract_key,
+            jwt::get_jwtservice,
+            models::{
+                create_apikey, delete_apikey, get_apikey, CreateKeyRequest, CreateKeyResponse,
+                RevokeKeyRequest, TokenResponse, TokenType,
+            },
         },
+        websocket::manager::get_manager,
     },
     config::get_config,
     error::KohakuError,
@@ -176,6 +179,11 @@ async fn revoke(
             delete_apikey(Some(key_id), None).await?;
             service.blacklist_key(key_id, None).await?;
             info!("[Authentication] - API Key with prefix {} revoked!", prefix);
+
+            let manager = get_manager();
+            if let Ok(man) = manager {
+                man.remove_connection(&key_id).await;
+            }
             return Ok(HttpResponse::Ok().finish());
         }
     }
