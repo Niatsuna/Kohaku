@@ -25,8 +25,8 @@ pub async fn ws_handler(
         ));
     }
     let verified_key = check_authorization_key(api_key.unwrap()).await?;
-
     let client_id = req.headers().get("UUID").and_then(|h| h.to_str().ok());
+
     let client_id = match client_id {
         Some(cid) => Uuid::from_str(cid)
             .map_err(|_| KohakuError::BadRequest("Given UUID is malformed!".to_string()))?,

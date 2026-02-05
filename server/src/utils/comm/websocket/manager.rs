@@ -73,6 +73,12 @@ impl WsConnectionManager {
         uuids.contains_key(uuid)
     }
 
+    /// Checks if the given uuid matches a given key id
+    pub fn check_matching_uuid_to_key(&self, uuid: &Uuid, key_id: &i32) -> bool {
+        let uuids = self.uuids.read().unwrap();
+        uuids.contains_key(uuid) && uuids.get(uuid).unwrap() == key_id
+    }
+
     /// Removes a connection from the manager, making it unable to receive messages from the server
     ///
     /// # Parameters
@@ -120,7 +126,7 @@ impl WsConnectionManager {
         let mut failed_clients = Vec::new();
 
         for key_id in collections {
-            match self.send_to_client(&payload, &key_id).await {
+            match self.send_to_client(&payload, Some(&key_id), None).await {
                 Ok(_) => successful += 1,
                 Err(e) => {
                     error!("[WS - Broadcast] {}", e);
@@ -145,7 +151,8 @@ impl WsConnectionManager {
     ///
     /// # Parameters
     /// - `payload` - Generic serializable content
-    /// - `key_id` - Identifier for target client via API key id
+    /// - `key_id` - Identifier for target client via API key id. Either this or target_uuid must be set.
+    /// - `target_uuid` - Identifier for target client via unique uuid. Either this or key_id must be set.
     ///
     /// # Type Parameters
     /// - `T` - Any struct that derives [`Serialize`]
@@ -157,22 +164,44 @@ impl WsConnectionManager {
     pub async fn send_to_client<T: Serialize>(
         &self,
         payload: T,
-        key_id: &i32,
+        key_id: Option<&i32>,
+        target_uuid: Option<&Uuid>,
     ) -> Result<(), KohakuError> {
+        if key_id.is_none() && target_uuid.is_none() {
+            return Err(KohakuError::ValidationError(
+                "Illegal Argument: At least one of the parameters must be set!".to_string(),
+            ));
+        }
+
+        let id = if key_id.is_none() {
+            let t = target_uuid.unwrap();
+            let uuids = self.uuids.read().unwrap();
+            let i = uuids.get(t).copied();
+            if i.is_none() {
+                return Err(KohakuError::ValidationError(
+                    "Illegal Argument: Target uuid is not matching any connected client"
+                        .to_string(),
+                ));
+            }
+            &i.unwrap()
+        } else {
+            key_id.unwrap()
+        };
+
         let connections = self.connections.read().unwrap().clone();
         let content = serde_json::to_string(&payload).unwrap();
 
-        if let Some((sender, _, _)) = connections.get(key_id) {
+        if let Some((sender, _, _)) = connections.get(id) {
             sender.send(Message::Text(content.into())).map_err(|e| {
                 KohakuError::WebsocketError(format!(
                     "Failed to send to client with key_id {} : {}",
-                    key_id, e
+                    id, e
                 ))
             })
         } else {
             Err(KohakuError::ExternalServiceError(format!(
                 "Client with key id {} not found",
-                key_id
+                id
             )))
         }
     }
