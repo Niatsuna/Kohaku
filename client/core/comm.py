@@ -13,25 +13,26 @@ logger = logging.getLogger(__name__)
 class WsClient:
     def __init__(self, url: str):
         self.url: str = url
-        self.api_key: str | None = self.load_api_key()
+        self.api_key: str | None = self.load_secret('.secret')
+        self.uuid : str | None = self.load_secret('.session')
         self.websocket: ClientConnection | None = None
         self.running: bool = False
         self.heartbeat_timeout: int = 90
 
-    def load_api_key(self) -> str | None:
-        """Load API key from .secret file"""
-        secret_path = Path(".secret")
+    def load_secret(self, path : str) -> str | None:
+        """Load secret from file"""
+        secret_path = Path(path)
         if not secret_path.exists():
             logger.error(f"Secret file '{secret_path}' not found")
             return None
 
         try:
-            api_key = secret_path.read_text().strip()
-            if not api_key:
+            secret = secret_path.read_text().strip()
+            if not secret:
                 logger.error(f"Secret file '{secret_path}' is empty")
                 return None
-            logger.info("API key loaded successfully")
-            return api_key
+            logger.info(f"Secret from path '{path}' loaded successfully")
+            return secret
         except Exception as e:
             logger.error(f"Failed to read secret file: {e}")
             return None
@@ -40,6 +41,9 @@ class WsClient:
         """Establish WebSocket connection with API key in header"""
         if self.api_key is not None:
             headers = {"X-API-Key": self.api_key}
+            if self.uuid is not None :
+                headers["UUID"] = self.uuid
+                logger.info(f"Resuming connection with identity UUID : {self.uuid}")
             try:
                 self.websocket = await connect(self.url, additional_headers=headers)
                 self.running = True
