@@ -29,8 +29,8 @@ class Config:
         required = {
             "CLIENT_TOKEN": self.token,
             "CLIENT_PREFIX": self.prefix,
-            "SERVER_WS_URL": self.server_ws_url,
-            "SERVER_API_URL": self.server_api_url,
+            "CLIENT_WS_URL": self.server_ws_url,
+            "CLIENT_API_URL": self.server_api_url,
             "OWNER_ID": self.owner_id,
         }
 
@@ -52,8 +52,8 @@ class Config:
             config = cls(
                 token=os.getenv("CLIENT_TOKEN", ""),
                 prefix=os.getenv("CLIENT_PREFIX", ""),
-                server_ws_url=os.getenv("SERVER_WS_URL", ""),
-                server_api_url=os.getenv("SERVER_API_URL", ""),
+                server_ws_url=os.getenv("CLIENT_WS_URL", ""),
+                server_api_url=os.getenv("CLIENT_API_URL", ""),
                 logging_level=os.getenv("CLIENT_LOGGING_LEVEL", "INFO"),
                 repo=os.getenv("CLIENT_REPO_URL"),
                 owner_id=int(os.getenv("OWNER_ID")),
