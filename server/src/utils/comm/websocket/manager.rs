@@ -3,206 +3,128 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use actix_ws::{Message, MessageStream, Session};
+use actix_ws::{MessageStream, Session};
 use serde::Serialize;
-use tokio::sync::{mpsc::UnboundedSender, OnceCell};
-use tracing::{error, info};
+use tokio::sync::OnceCell;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::utils::{
-    comm::websocket::connection::{WsClientInfo, WsConnection},
+    comm::websocket::connection::{WsConnection, WsConnectionHandle},
     error::KohakuError,
 };
 
 static WS_CONNECTION_MANAGER: OnceCell<Arc<WsConnectionManager>> = OnceCell::const_new();
 
 pub struct WsConnectionManager {
-    connections: RwLock<HashMap<i32, (UnboundedSender<Message>, Uuid, Session)>>,
-    uuids: RwLock<HashMap<Uuid, i32>>,
+    connections: Arc<RwLock<HashMap<Uuid, WsConnectionHandle>>>,
+    keys: Arc<RwLock<HashMap<i32, Uuid>>>,
 }
 
 impl WsConnectionManager {
     pub fn new() -> Self {
         Self {
-            connections: RwLock::new(HashMap::new()),
-            uuids: RwLock::new(HashMap::new()),
+            connections: Arc::new(RwLock::new(HashMap::new())),
+            keys: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    /// Prepares the necessary connection and registers it inside the manager.
-    /// If a connection via this API key is already present, no new connection will be established.
-    ///
-    /// # Parameters
-    /// - `info` : Necessary information about the connected client
-    /// - `session` : Current active session to the client
-    /// - `stream` : Current active stream from the client
-    ///
-    /// # Returns
-    /// A [`Option<WsConnection>`] which is either:
-    /// - [`Some`] : A [`WsConnection`] that is registered inside the manager and can be executed via [`WsConnection::run`]
-    /// - [`None`] : If the API key is already in use with some connection
-    pub async fn add_connection(
+    /// Checks if any connection with said uuid or key is currently active
+    pub fn check_if_active(&self, uuid_: Option<Uuid>, key_id_: Option<i32>) -> bool {
+        let active_uuid = uuid_.is_some()
+            && self
+                .connections
+                .read()
+                .unwrap()
+                .contains_key(&uuid_.unwrap());
+        let active_key_id =
+            key_id_.is_some() && self.keys.read().unwrap().contains_key(&key_id_.unwrap());
+
+        active_uuid && active_key_id
+    }
+
+    pub async fn register(
         &self,
-        info: WsClientInfo,
+        uuid: Uuid,
+        key_id: i32,
         session: Session,
         stream: MessageStream,
-    ) -> Option<WsConnection> {
-        let key_id = info.key_id;
-        if self.connections.read().unwrap().contains_key(&key_id) {
-            return None;
-        }
-        let conn = WsConnection::new(info.clone(), session.clone(), stream);
-        let sender = conn.server_tx.clone();
-        self.connections
-            .write()
-            .unwrap()
-            .insert(key_id, (sender, info.clone().client_id, session));
-        self.uuids.write().unwrap().insert(info.client_id, key_id);
-        Some(conn)
-    }
+    ) -> Result<WsConnection, KohakuError> {
+        let connection = WsConnection::new(uuid, session, stream);
 
-    /// Checks if an active connection is being managed by identifying it with its API key id
-    pub fn check_connection_by_key_id(&self, key_id: &i32) -> bool {
-        let connections = self.connections.read().unwrap();
-        connections.contains_key(key_id)
-    }
+        let handle = connection.get_handle();
+        let mut shutdown_cleanup = handle.shutdown_r.resubscribe();
 
-    /// Checks if an active connection is being managed by identfying it with its clients uuid
-    pub fn check_connection_by_uuid(&self, uuid: &Uuid) -> bool {
-        let uuids = self.uuids.read().unwrap();
-        uuids.contains_key(uuid)
-    }
+        let mut conns = self.connections.write().map_err(|e| {
+            KohakuError::WebsocketError(format!(
+                "Failed to gain access to connection hashmap: {}",
+                e
+            ))
+        })?;
+        let mut keys = self.keys.write().map_err(|e| {
+            KohakuError::WebsocketError(format!(
+                "Failed to gain access to active keys hashmap: {}",
+                e
+            ))
+        })?;
+        conns.insert(uuid, handle);
+        keys.insert(key_id, uuid);
 
-    /// Checks if the given uuid matches a given key id
-    pub fn check_matching_uuid_to_key(&self, uuid: &Uuid, key_id: &i32) -> bool {
-        let uuids = self.uuids.read().unwrap();
-        uuids.contains_key(uuid) && uuids.get(uuid).unwrap() == key_id
-    }
-
-    /// Removes a connection from the manager, making it unable to receive messages from the server
-    ///
-    /// # Parameters
-    /// - `key_id` - API key identifier for connections in the manager
-    pub async fn remove_connection(&self, key_id: &i32) {
-        let connections = self.connections.read().unwrap();
-        let res = connections.get(&key_id);
-        if let Some((_, uuid, session)) = res {
+        let connections = self.connections.clone();
+        let keys = self.keys.clone();
+        tokio::spawn(async move {
+            let _ = shutdown_cleanup.recv().await;
             info!(
-                "[WS - Removal] Server issued closure of connection with {}. Closing session!",
+                "[WS - Manager] Shutdown detected for '{}', cleaning up",
                 uuid
             );
-            let _ = session.clone().close(None).await;
-            self.uuids.write().unwrap().remove(uuid);
-        }
-        self.connections.write().unwrap().remove(key_id);
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+            let mut conns = connections.write().unwrap();
+            let mut ks = keys.write().unwrap();
+            conns.remove(&uuid);
+            ks.remove(&key_id);
+        });
+
+        Ok(connection)
     }
 
-    /// Sends a [`Serialize`]-able payload to multiple clients.
-    ///
-    /// # Parameters
-    /// - `payload` - Generic serializable content
-    /// - `key_ids` - Vector of API key ids as targets. If [`None`] the payload will be send to all active connections
-    ///
-    /// # Type Parameters
-    /// - `T` - Any struct that derives [`Serialize`]
-    ///
-    /// # Returns
-    /// A [`Result`] which is either
-    /// - [`Ok`] - Indicating that the queueing of the message was successful
-    /// - [`Err`] - A [`KohakuError`] indicating that ANY operation failed
-    pub async fn broadcast<T: Serialize>(
-        &self,
-        payload: T,
-        key_ids: Option<Vec<i32>>,
-    ) -> Result<(), KohakuError> {
-        let collections = match key_ids {
-            Some(given) => given,
-            None => {
-                let stored = self.connections.read().unwrap().clone();
-                stored.keys().copied().collect::<Vec<i32>>()
+    pub async fn disconnect(&self, uuid_: Option<Uuid>, key_id_: Option<i32>) {
+        let uuid2 = match key_id_ {
+            Some(k) => {
+                let keys = self.keys.read().unwrap();
+                keys.get(&k).cloned()
             }
+            None => None,
         };
-        let mut successful = 0;
-        let mut failed_clients = Vec::new();
 
-        for key_id in collections {
-            match self.send_to_client(&payload, Some(&key_id), None).await {
-                Ok(_) => successful += 1,
-                Err(e) => {
-                    error!("[WS - Broadcast] {}", e);
-                    failed_clients.push(key_id)
-                }
-            }
+        if uuid_.is_none() && uuid2.is_none() {
+            return;
         }
 
-        // Clean up
-        for key_id in &failed_clients {
-            self.remove_connection(key_id).await;
+        let uuid = if let Some(u) = uuid_ {
+            u
+        } else {
+            uuid2.unwrap()
+        };
+
+        let connections = self.connections.read().unwrap();
+        let handle = connections.get(&uuid);
+        if let Some(h) = handle {
+            let _ = h.disconnect();
         }
-        info!(
-            "[WS - Broadcast] Broadcasted 1 message successfully {} time(s) and failed {} time(s)",
-            successful,
-            &failed_clients.len()
-        );
-        Ok(())
     }
 
-    /// Sends a [`Serialize`]-able payload to a connected client.
-    ///
-    /// # Parameters
-    /// - `payload` - Generic serializable content
-    /// - `key_id` - Identifier for target client via API key id. Either this or target_uuid must be set.
-    /// - `target_uuid` - Identifier for target client via unique uuid. Either this or key_id must be set.
-    ///
-    /// # Type Parameters
-    /// - `T` - Any struct that derives [`Serialize`]
-    ///
-    /// # Returns
-    /// A [`Result`] which is either
-    /// - [`Ok`] - Indicating that the queueing of the message was successful
-    /// - [`Err`] - A [`KohakuError`] indicating that ANY operation failed
     pub async fn send_to_client<T: Serialize>(
         &self,
-        payload: T,
-        key_id: Option<&i32>,
-        target_uuid: Option<&Uuid>,
+        uuid: &Uuid,
+        payload: &T,
     ) -> Result<(), KohakuError> {
-        if key_id.is_none() && target_uuid.is_none() {
-            return Err(KohakuError::ValidationError(
-                "Illegal Argument: At least one of the parameters must be set!".to_string(),
-            ));
-        }
-
-        let id = if key_id.is_none() {
-            let t = target_uuid.unwrap();
-            let uuids = self.uuids.read().unwrap();
-            let i = uuids.get(t).copied();
-            if i.is_none() {
-                return Err(KohakuError::ValidationError(
-                    "Illegal Argument: Target uuid is not matching any connected client"
-                        .to_string(),
-                ));
-            }
-            &i.unwrap()
+        let connections = self.connections.read().unwrap();
+        if let Some(conn) = connections.get(uuid) {
+            conn.send(payload)
         } else {
-            key_id.unwrap()
-        };
-
-        let connections = self.connections.read().unwrap().clone();
-        let content = serde_json::to_string(&payload).unwrap();
-
-        if let Some((sender, _, _)) = connections.get(id) {
-            sender.send(Message::Text(content.into())).map_err(|e| {
-                KohakuError::WebsocketError(format!(
-                    "Failed to send to client with key_id {} : {}",
-                    id, e
-                ))
-            })
-        } else {
-            Err(KohakuError::ExternalServiceError(format!(
-                "Client with key id {} not found",
-                id
-            )))
+            Err(KohakuError::WebsocketError("Not connected".to_string()))
         }
     }
 }

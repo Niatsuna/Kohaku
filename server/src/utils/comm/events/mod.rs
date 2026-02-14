@@ -37,7 +37,7 @@ async fn subscribe(
 ) -> Result<HttpResponse, KohakuError> {
     let _ = check_authorization_token(&req, Some(vec!["events:subscribe"])).await?;
     let topic = body.topic.clone();
-    let target_uuid = body.target_uuid.clone();
+    let target_uuid = body.target_uuid;
     let target_data = body.target_data.clone();
     let sub = create_subscription(topic, target_uuid, target_data).await?;
 
@@ -57,19 +57,13 @@ async fn unsubscribe(
 
     // Check if currently connected and claims key id matches to the target uuid
     let manager = get_manager()?;
-    if !manager.check_connection_by_uuid(&target_uuid) {
+    if !manager.check_if_active(Some(target_uuid), Some(claims.key_id)) {
         return Err(KohakuError::ValidationError(
-            "Target uuid is currently not in use".to_string(),
-        ));
-    }
-    if !manager.check_matching_uuid_to_key(&target_uuid, &claims.key_id) {
-        return Err(KohakuError::Forbidden(
-            "Key does not fit to target uuid! Editing other clients subscriptions is not allowed!"
-                .to_string(),
+            "Uuid and/or API Key already in use".to_string(),
         ));
     }
 
-    let _ = delete_subscription(topic, Some(target_uuid), target_data).await?;
+    delete_subscription(topic, Some(target_uuid), target_data).await?;
 
     Ok(HttpResponse::Ok().finish())
 }

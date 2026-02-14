@@ -182,7 +182,7 @@ async fn revoke(
 
             let manager = get_manager();
             if let Ok(man) = manager {
-                man.remove_connection(&key_id).await;
+                man.disconnect(None, Some(key_id)).await;
             }
             return Ok(HttpResponse::Ok().finish());
         }

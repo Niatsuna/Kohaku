@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use actix_web::{web, HttpRequest, HttpResponse};
-use actix_ws::Message;
 use serde_json::json;
 use tracing::info;
 use uuid::Uuid;
@@ -9,7 +8,7 @@ use uuid::Uuid;
 use crate::utils::{
     comm::{
         auth::{check_authorization_key, extract_key},
-        websocket::{connection::WsClientInfo, manager::get_manager},
+        websocket::manager::get_manager,
     },
     error::KohakuError,
 };
@@ -34,37 +33,23 @@ pub async fn ws_handler(
     };
 
     let manager = get_manager()?;
-    if manager.check_connection_by_key_id(&verified_key.id)
-        || manager.check_connection_by_uuid(&client_id)
-    {
-        return Err(KohakuError::Conflict(
-            "API Key or client UUID already in use!".to_string(),
+    if manager.check_if_active(Some(client_id), Some(verified_key.id)) {
+        return Err(KohakuError::WebsocketError(
+            "UUID and/or API Key alread in use".to_string(),
         ));
     }
-
-    let info = WsClientInfo {
-        client_id,
-        owner: verified_key.owner,
-        key_id: verified_key.id,
-    };
 
     let (response, session, msg_stream) =
         actix_ws::handle(&req, stream).map_err(|e| KohakuError::WebsocketError(e.to_string()))?;
 
-    let conn = manager
-        .add_connection(info.clone(), session, msg_stream)
-        .await;
-    if let Some(conn_) = conn {
-        info!(
-            "[WS - Conn] Established new connection {} for key with id {} ({})",
-            info.client_id, info.key_id, info.owner
-        );
-
+    if let Ok(conn) = manager
+        .register(client_id, verified_key.id, session, msg_stream)
+        .await
+    {
+        info!("[WS] Established connection to '{}'", client_id);
         let payload = json!({ "Bearer" : client_id });
-        let content = serde_json::to_string(&payload).unwrap();
-        let _ = conn_.server_tx.send(Message::Text(content.into()));
-
-        conn_.run(manager);
+        let _ = manager.send_to_client(&client_id, &payload).await;
+        conn.run().await;
     } else {
         return Err(KohakuError::WebsocketError(
             "Couldn't create WebSocketConnection!".to_string(),

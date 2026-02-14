@@ -51,7 +51,7 @@ pub async fn notify(
         };
 
         let manager = get_manager()?;
-        manager.send_to_client(message, None, Some(&target)).await?;
+        manager.send_to_client(&target, &message).await?;
     }
     Ok(())
 }

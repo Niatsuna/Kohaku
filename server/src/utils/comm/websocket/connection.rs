@@ -1,189 +1,254 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
-use actix_ws::{Message, MessageStream, Session};
-use futures_util::StreamExt;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tracing::info;
+use actix_ws::{Closed, Message, MessageStream, Session};
+use serde::Serialize;
+use tokio::sync::{
+    broadcast,
+    mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+};
+use tracing::{error, info};
 use uuid::Uuid;
 
-use crate::utils::comm::websocket::manager::WsConnectionManager;
+use crate::utils::error::KohakuError;
 
 const HEARTBEAT_INTERVAL_SEC: u64 = 30;
 const HEARTBEAT_MAX_MISSED: i32 = 3;
 
-#[derive(Debug, Clone)]
-pub struct WsClientInfo {
-    pub client_id: Uuid,
-    pub owner: String,
-    pub key_id: i32,
+pub struct WsConnectionHandle {
+    pub uuid: Uuid,
+    outgoing_w: UnboundedSender<Message>,
+    pub shutdown_w: broadcast::Sender<()>,
+    pub shutdown_r: broadcast::Receiver<()>,
+}
+
+impl WsConnectionHandle {
+    pub fn send<T: Serialize>(&self, payload: &T) -> Result<(), KohakuError> {
+        let content = serde_json::to_string(payload).map_err(|e| {
+            KohakuError::ValidationError(format!("Failed to serialize payload: {}", e))
+        })?;
+        let message = Message::Text(content.into());
+        self.outgoing_w.send(message).map_err(|e| {
+            KohakuError::WebsocketError(format!("Failed to queue outgoing message: {}", e))
+        })
+    }
+
+    pub fn disconnect(&self) -> Result<(), KohakuError> {
+        info!(
+            "[WS - Connection] Closing connection with uuid '{}'",
+            self.uuid
+        );
+        match self.shutdown_w.send(()) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(KohakuError::WebsocketError(format!(
+                "Failed to queue shutdown message: {}",
+                e
+            ))),
+        }
+    }
 }
 
 pub struct WsConnection {
-    pub info: WsClientInfo,
+    pub uuid: Uuid,
     session: Session,
-    extern_rx: MessageStream,
-    pub server_tx: UnboundedSender<Message>,
-    server_rx: UnboundedReceiver<Message>,
-    heartbeat_tx: UnboundedSender<()>,
-    pub heartbeat_rx: UnboundedReceiver<()>,
+    incoming_r: MessageStream,
+
+    outgoing_w: UnboundedSender<Message>,
+    outgoing_r: UnboundedReceiver<Message>,
+
+    incoming_w: UnboundedSender<Message>,
+    incoming_rx: UnboundedReceiver<Message>,
+
+    heartbeat_w: UnboundedSender<()>,
+    heartbeat_r: UnboundedReceiver<()>,
+
+    shutdown_w: broadcast::Sender<()>,
+    shutdown_r: broadcast::Receiver<()>,
 }
 
 impl WsConnection {
-    pub fn new(info: WsClientInfo, session: Session, stream: MessageStream) -> Self {
-        let (server_tx, server_rx) = unbounded_channel::<Message>();
-        let (heartbeat_tx, heartbeat_rx) = unbounded_channel::<()>();
+    pub fn new(uuid: Uuid, session: Session, stream: MessageStream) -> Self {
+        let (shutdown_w, shutdown_r) = broadcast::channel(1);
+        let (outgoing_w, outgoing_r) = unbounded_channel();
+        let (heartbeat_w, heartbeat_r) = unbounded_channel();
+        let (incoming_w, incoming_rx) = unbounded_channel();
 
-        WsConnection {
-            info,
+        Self {
+            uuid,
             session,
-            extern_rx: stream,
-            server_tx,
-            server_rx,
-            heartbeat_tx,
-            heartbeat_rx,
+            incoming_r: stream,
+            outgoing_w,
+            outgoing_r,
+            incoming_w,
+            incoming_rx,
+            heartbeat_w,
+            heartbeat_r,
+            shutdown_w,
+            shutdown_r,
         }
     }
 
-    /// Start WebSocket Connection : Spawn all three tasks to have a functioning connection
-    ///
-    /// Tasks:
-    /// - [`WsConnection::send`] - Sends queued messages from the server to the client
-    /// - [`WsConnection::heartbeat`] - Checks if the client is still alive, if not close connection
-    /// - [`WsConnection::receive`] - Handles incoming messages from the client and propagates pongs (Heartbeats) to the heartbeat task
-    ///
-    /// # Parameters
-    /// - `manager` : The associated [`WsConnectionManager`]. Will be used to remove this connection when its closes
-    pub fn run(self, manager: Arc<WsConnectionManager>) {
-        let client_id = self.info.client_id;
-        let key_id = self.info.key_id;
-        let session = self.session;
-        let extern_rx = self.extern_rx;
-        let server_rx = self.server_rx;
-        let heartbeat_tx = self.heartbeat_tx;
-        let heartbeat_rx = self.heartbeat_rx;
-
-        let session_send = session.clone();
-        let send_handle = tokio::spawn(async move {
-            Self::send(session_send, server_rx).await;
-        });
-
-        let session_htbt = session.clone();
-        let htbt_handle = tokio::spawn(async move {
-            Self::heartbeat(session_htbt, heartbeat_rx, client_id, key_id).await;
-        });
-
-        let session_recv = session.clone();
-
-        actix_web::rt::spawn(async move {
-            Self::receive(session_recv, extern_rx, heartbeat_tx).await;
-
-            // Wait for the other tasks to complete
-            let _ = tokio::join!(send_handle, htbt_handle);
-            info!("[WS - Conn] Client {} connection ended, closing session and removing from manager [Key: {}]", client_id, key_id);
-
-            let _ = session.close(None).await;
-            manager.remove_connection(&key_id).await;
-        });
-    }
-
-    /// Sends queued data from the server to the connected client.
-    /// Will stop if any message cannot reach the client.
-    ///
-    /// # Parameters
-    /// - `session` : The connected associated [`Session`] to the client
-    /// - `server_rx`: Receiver half of the internal channel. Incoming messages are messages from other services within the server
-    async fn send(session: Session, mut server_rx: UnboundedReceiver<Message>) {
-        while let Some(msg) = server_rx.recv().await {
-            let mut session = session.clone();
-            let result = match msg {
-                Message::Text(text) => session.text(text).await,
-                Message::Binary(bin) => session.binary(bin).await,
-                Message::Ping(bytes) => session.ping(&bytes).await,
-                Message::Pong(bytes) => session.pong(&bytes).await,
-                Message::Close(reason) => session.close(reason).await,
-                _ => Ok(()),
-            };
-
-            if result.is_err() {
-                break;
-            }
+    pub fn get_handle(&self) -> WsConnectionHandle {
+        WsConnectionHandle {
+            uuid: self.uuid,
+            outgoing_w: self.outgoing_w.clone(),
+            shutdown_w: self.shutdown_w.clone(),
+            shutdown_r: self.shutdown_r.resubscribe(),
         }
     }
 
-    /// Receives externally messages from the client that reached the server
-    /// Will only react to `Ping`, `Pong` and `Close` messages and will stop if either a closing event was detected
-    /// or the resulting pong does not reach the client.
-    ///
-    /// # Parameters
-    /// - `session` : The connected associated [`Session`] to the client
-    /// - `server_rx`: Receiver half of the internal channel. Incoming messages are messages from other services within the server
-    /// - `heartbeat_tx` : Sender half of the internal heartbeat channel. Incoming pongs will be propagated to this channel to reset the missed pings counter
-    async fn receive(
-        mut session: Session,
-        mut extern_rx: MessageStream,
-        heartbeat_tx: UnboundedSender<()>,
-    ) {
-        while let Some(Ok(msg)) = extern_rx.next().await {
-            match msg {
-                Message::Close(_) => {
-                    info!("[WS - Conn] Client send closing event, disconnecting");
-                    let _ = session.close(None).await;
-                    return;
-                }
-                Message::Ping(bytes) => {
-                    if session.pong(&bytes).await.is_err() {
-                        return;
+    pub async fn run(self) {
+        let uuid = self.uuid;
+        let shutdown_w = self.shutdown_w.clone();
+
+        // Spawn outgoing message handler
+        let session_out = self.session.clone();
+        let mut outgoing_r = self.outgoing_r;
+        let shutdown_w_out = shutdown_w.clone();
+        let mut shutdown_r_out = self.shutdown_r.resubscribe();
+
+        let outgoing_handle = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = shutdown_r_out.recv() => {
+                        info!("[WS - Connection] Shutdown received for '{}'. Closing internal channel.", uuid);
+                        outgoing_r.close();
+                    }
+
+                    Some(msg) = outgoing_r.recv() => {
+                        if let Err(e) = Self::handle_outgoing(session_out.clone(), msg).await {
+                            info!("[WS - Connection] Failed to send, closing for '{}' - Error : {}", uuid, e);
+                            if let Err(e) = shutdown_w_out.send(()) {
+                                error!("[WS - Connection] Failed to queue shutdown message: {}", e);
+                            }
+                            break;
+                        }
+                    }
+
+                    else => {
+                        info!("[WS - Connection] Internal channel closed for {}", uuid);
+                        break;
                     }
                 }
-                Message::Pong(_) => {
-                    let _ = heartbeat_tx.send(());
-                }
-                _ => {}
             }
-        }
+        });
+
+        // Spawn heartbeat handler
+        let mut session_htbt = self.session.clone();
+        let mut htbt_r = self.heartbeat_r;
+        let shutdown_w_htbt = shutdown_w.clone();
+        let mut shutdown_r_htbt = self.shutdown_r.resubscribe();
+        let htbt_handle = tokio::spawn(async move {
+            let mut missed_pings = 0;
+            let htbt_interval = Duration::from_secs(HEARTBEAT_INTERVAL_SEC);
+            loop {
+                tokio::select! {
+                    _ = shutdown_r_htbt.recv() => {
+                        info!("[WS - Connection] Shutdown received for '{}'. Closing heartbeat channel.", uuid);
+                        htbt_r.close();
+                    }
+
+                    _ = tokio::time::sleep(htbt_interval) => {
+                        if missed_pings >= HEARTBEAT_MAX_MISSED {
+                            info!("[WS - Connection] Client missed too many heartbeats, starting disconnect for '{}'", uuid);
+                            if let Err(e) = shutdown_w_htbt.send(()) {
+                                error!("[WS - Connection] Failed to queue shutdown message: {}", e);
+                            }
+                            break;
+                        }
+
+                        missed_pings += 1;
+                        if let Err(e) = session_htbt.ping(b"").await {
+                            error!("[WS - Connection] Failed to send ping: {}", e);
+                            if let Err(e) = shutdown_w_htbt.send(()) {
+                                error!("[WS - Connection] Failed to queue shutdown message: {}", e);
+                            }
+                            break;
+                        }
+                    }
+
+                    Some(_) = htbt_r.recv() => {
+                        missed_pings = 0;
+                    }
+
+                    else => {
+                        info!("[WS - Connection] Heartbeat channel closed for {}", uuid);
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Spawn incoming message handler
+        let session_in = self.session.clone();
+        let mut incoming_r = self.incoming_r;
+        let htbt_w_in = self.heartbeat_w.clone();
+        let shutdown_w_in = shutdown_w.clone();
+        let mut shutdown_r_in = self.shutdown_r.resubscribe();
+        actix_web::rt::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = shutdown_r_in.recv() => {
+                        info!("[WS - Connection] Shutdown received for '{}'. Closing external channel.", uuid);
+                        break;
+                    }
+
+                    Some(Ok(msg)) = incoming_r.recv() => {
+                        if !Self::handle_incoming(session_in.clone(), htbt_w_in.clone(), msg).await {
+                            info!("[WS - Connection] Client requested close for '{}'.", uuid);
+                            if let Err(e) = shutdown_w_in.send(()) {
+                                error!("[WS - Connection] Failed to queue shutdown message: {}", e);
+                            }
+                            break;
+                        }
+                    }
+
+                    else => {
+                        info!("[WS - Connection] External channel closed for {}", uuid);
+                        break;
+                    }
+                }
+            }
+            let _ = tokio::join!(outgoing_handle, htbt_handle);
+            let _ = self.session.close(None).await;
+            info!(
+                "[WS - Connection] Client connection to '{}' closed entirely.",
+                uuid
+            );
+        });
     }
 
-    /// Handles server-sided heartbeats to check if the connected client is still responding.
-    ///
-    /// Sends in `HEARTBEAT_INTERVAL_SEC` intervals a `ping` at the connected client.
-    /// `Pong`s reset the counter for missed pings.
-    /// Discard connection if the missed pings are reaching the threshold `HEARTBEAT_MAX_MISSED`
-    ///
-    /// # Parameters
-    /// - `session` : The connected associated [`Session`] to the client
-    /// - `heartbeat_rx` : Receiver half of the internal heartbeat channel. Incoming pongs will be propagated to this channel to reset the missed pings counter
-    /// - `client_id` : Readable identifier of connection (logging purposes)
-    /// - `key_id` : Readable identifier of API key associated with the connected client (logging purposes)
-    async fn heartbeat(
-        mut session: Session,
-        mut heartbeat_rx: UnboundedReceiver<()>,
-        client_id: Uuid,
-        key_id: i32,
-    ) {
-        let mut missing_pings = 0;
-        let heartbeat_interval = Duration::from_secs(HEARTBEAT_INTERVAL_SEC);
-
-        loop {
-            tokio::select! {
-              _ = tokio::time::sleep(heartbeat_interval) => {
-                if missing_pings >= HEARTBEAT_MAX_MISSED {
-                  info!("[WS - Conn] Client {} missed too many heartbeats, disconnecting [Key {}]", client_id, key_id);
-                  let _ = session.close(None).await;
-                  break;
-                }
-
-                // New pings
-                missing_pings += 1;
-                if session.ping(b"").await.is_err() {
-                  break;
-                }
-              }
-
-              // Reset missing pings
-              Some(_) = heartbeat_rx.recv() => {
-                missing_pings = 0;
-              }
-            }
+    async fn handle_outgoing(mut session: Session, message: Message) -> Result<(), KohakuError> {
+        match message {
+            Message::Text(text) => session.text(text).await,
+            Message::Binary(bin) => session.binary(bin).await,
+            Message::Ping(bytes) => session.ping(&bytes).await,
+            Message::Pong(bytes) => session.pong(&bytes).await,
+            Message::Close(reason) => session.close(reason).await,
+            _ => Ok(()),
         }
+        .map_err(|e| KohakuError::WebsocketError(format!("Failed to send message: {}", e)))
+    }
+
+    async fn handle_incoming(
+        mut session: Session,
+        heartbeat_w: UnboundedSender<()>,
+        message: Message,
+    ) -> bool {
+        let res = match message {
+            Message::Close(_) => Err(Closed),
+            Message::Ping(bytes) => session.pong(&bytes).await,
+            Message::Pong(_) => {
+                let temp = heartbeat_w.send(());
+                if let Err(e) = temp {
+                    error!("[WS - Connection] Failed to queue heartbeat message: {}", e);
+                    Err(Closed)
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Ok(()),
+        };
+
+        res.is_ok()
     }
 }
