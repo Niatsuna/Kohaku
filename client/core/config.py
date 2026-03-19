@@ -31,7 +31,6 @@ class Config:
             "CLIENT_PREFIX": self.prefix,
             "CLIENT_WS_URL": self.server_ws_url,
             "CLIENT_API_URL": self.server_api_url,
-            "OWNER_ID": self.owner_id,
         }
 
         for name, val in required.items():
@@ -56,7 +55,6 @@ class Config:
                 server_api_url=os.getenv("CLIENT_API_URL", ""),
                 logging_level=os.getenv("CLIENT_LOGGING_LEVEL", "INFO"),
                 repo=os.getenv("CLIENT_REPO_URL"),
-                owner_id=int(os.getenv("OWNER_ID")),
             )
             logger.info("Configuration loaded successfully")
             return config
