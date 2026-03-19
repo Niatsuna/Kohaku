@@ -30,8 +30,7 @@ pub async fn notify(
     let name = Some(topic.to_string());
     let _ = get_topic(None, name.clone()).await?;
     let subs = get_subscription(name, None, None).await?;
-
-    let grouped = subs.into_iter().into_group_map_by(|s| s.target_uuid);
+    let grouped = subs.into_iter().into_group_map_by(|s| s.key_id);
     for (target, subs) in grouped {
         let target_data = subs
             .iter()

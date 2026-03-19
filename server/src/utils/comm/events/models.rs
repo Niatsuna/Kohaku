@@ -40,7 +40,7 @@ pub struct EventMessage {
 pub struct Subscription {
     pub id: i32,
     pub topic_id: i32,
-    pub target_uuid: Uuid,
+    pub key_id: i32,
     pub target_data: Option<Value>,
     pub created_at: NaiveDateTime,
 }
@@ -49,7 +49,7 @@ pub struct Subscription {
 #[diesel(table_name = crate::db::schema::subscriptions)]
 pub struct NewSubscription {
     topic_id: i32,
-    target_uuid: Uuid,
+    key_id: i32,
     target_data: Option<Value>,
 }
 
@@ -73,7 +73,7 @@ pub struct DeleteSubscription {
 ///
 /// # Parameters
 /// - `topic` : [`String`] representation of the topic name
-/// - `target_uuid` : [`Uuid`] of the subscribing client (e.g. Discord Client)
+/// - `key_id` : [`i32`] of the subscribing clients API Key (e.g. Discord Client)
 /// - `target_data` : Optional additional information for the resulting event (e.g. Discord channel id and guild id)
 ///
 /// # Returns
@@ -82,7 +82,7 @@ pub struct DeleteSubscription {
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn create_subscription<T: Serialize>(
     topic: String,
-    target_uuid: Uuid,
+    key_id: i32,
     target_data_: Option<T>,
 ) -> Result<Subscription, KohakuError> {
     let topic_ = get_topic(None, Some(topic)).await?;
@@ -93,7 +93,7 @@ pub async fn create_subscription<T: Serialize>(
 
     let new_subscription = NewSubscription {
         topic_id: topic_.id,
-        target_uuid,
+        key_id,
         target_data: Some(data),
     };
 
@@ -107,10 +107,10 @@ pub async fn create_subscription<T: Serialize>(
 ///
 /// # Parameters
 /// - `topic_` : Topic name.
-/// - `target_uuid_` : Client identifier based on websocket connection.
+/// - `key_id_` : Client identifier based on associated api key.
 /// - `target_data_` : Additional target data for unique identification of subscription.
 ///
-/// Either `topic_` or `target_uuid_` must be set.
+/// Either `topic_` or `key_id_` must be set.
 ///
 /// # Returns
 /// A [`Result`] which is either
@@ -118,11 +118,11 @@ pub async fn create_subscription<T: Serialize>(
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn get_subscription(
     topic_: Option<String>,
-    target_uuid_: Option<Uuid>,
+    key_id_: Option<i32>,
     target_data_: Option<Value>,
 ) -> Result<Vec<Subscription>, KohakuError> {
     use crate::db::schema::subscriptions::dsl::*;
-    if topic_.is_none() && target_uuid_.is_none() {
+    if topic_.is_none() && key_id_.is_none() {
         return Err(KohakuError::ValidationError(
             "Illegal Argument: At least one of the parameters must be set!".to_string(),
         ));
@@ -135,8 +135,8 @@ pub async fn get_subscription(
         query = FilterDsl::filter(query, topic_id.eq(topic.id));
     }
 
-    if let Some(uuid) = target_uuid_ {
-        query = FilterDsl::filter(query, target_uuid.eq(uuid));
+    if let Some(k) = key_id_ {
+        query = FilterDsl::filter(query, key_id.eq(k));
     }
 
     if let Some(td) = target_data_ {
@@ -152,10 +152,10 @@ pub async fn get_subscription(
 ///
 /// # Parameters
 /// - `topic_` : Topic name.
-/// - `target_uuid_` : Client identifier based on websocket connection.
+/// - `key_id_` : Client identifier based on associated api key.
 /// - `target_data_` : Additional target data for unique identification of subscription.
 ///
-/// Either `topic_` or `target_uuid_` must be set.
+/// Either `topic_` or `key_id_` must be set.
 ///
 /// # Returns
 /// A [`Result`] which is either
@@ -163,11 +163,11 @@ pub async fn get_subscription(
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn delete_subscription(
     topic_: Option<String>,
-    target_uuid_: Option<Uuid>,
+    key_id_: Option<i32>,
     target_data_: Option<Value>,
 ) -> Result<(), KohakuError> {
     use crate::db::schema::subscriptions::dsl::*;
-    if topic_.is_none() && target_uuid_.is_none() {
+    if topic_.is_none() && key_id_.is_none() {
         return Err(KohakuError::ValidationError(
             "Illegal Argument: At least one of the parameters must be set!".to_string(),
         ));
@@ -180,8 +180,8 @@ pub async fn delete_subscription(
         query = FilterDsl::filter(query, topic_id.eq(topic.id));
     }
 
-    if let Some(uuid) = target_uuid_ {
-        query = FilterDsl::filter(query, target_uuid.eq(uuid));
+    if let Some(k) = key_id_ {
+        query = FilterDsl::filter(query, key_id.eq(k));
     }
 
     if let Some(td) = target_data_ {

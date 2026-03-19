@@ -7,7 +7,6 @@ use crate::utils::{
             create_subscription, delete_subscription, get_all_topics, CreateSubscription,
             DeleteSubscription,
         },
-        websocket::manager::get_manager,
     },
     error::KohakuError,
 };
@@ -35,11 +34,12 @@ async fn subscribe(
     req: HttpRequest,
     body: web::Json<CreateSubscription>,
 ) -> Result<HttpResponse, KohakuError> {
-    let _ = check_authorization_token(&req, Some(vec!["events:subscribe"])).await?;
+    let claims = check_authorization_token(&req, Some(vec!["events:subscribe"])).await?;
+
     let topic = body.topic.clone();
-    let target_uuid = body.target_uuid;
+    let key_id = claims.key_id;
     let target_data = body.target_data.clone();
-    let sub = create_subscription(topic, target_uuid, target_data).await?;
+    let sub = create_subscription(topic, key_id, target_data).await?;
 
     Ok(HttpResponse::Ok().json(sub))
 }
@@ -52,18 +52,10 @@ async fn unsubscribe(
     let claims = check_authorization_token(&req, Some(vec!["events:subscribe"])).await?;
 
     let topic = body.topic.clone();
-    let target_uuid = body.target_uuid;
+    let key_id = claims.key_id;
     let target_data = body.target_data.clone();
 
-    // Check if currently connected and claims key id matches to the target uuid
-    let manager = get_manager()?;
-    if !manager.check_if_active(Some(target_uuid), Some(claims.key_id)) {
-        return Err(KohakuError::ValidationError(
-            "Uuid and/or API Key already in use".to_string(),
-        ));
-    }
-
-    delete_subscription(topic, Some(target_uuid), target_data).await?;
+    delete_subscription(topic, Some(key_id), target_data).await?;
 
     Ok(HttpResponse::Ok().finish())
 }

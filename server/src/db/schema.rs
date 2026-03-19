@@ -18,7 +18,7 @@ diesel::table! {
     subscriptions (id) {
         id -> Int4,
         topic_id -> Int4,
-        target_uuid -> Uuid,
+        key_id -> Int4,
         target_data -> Nullable<Jsonb>,
         created_at -> Timestamp,
     }
@@ -37,6 +37,7 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(subscriptions -> api_keys (key_id));
 diesel::joinable!(subscriptions -> topics (topic_id));
 
 diesel::allow_tables_to_appear_in_same_query!(api_keys, subscriptions, topics,);

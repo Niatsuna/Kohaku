@@ -7,7 +7,6 @@ use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
 };
 use tracing::{error, info};
-use uuid::Uuid;
 
 use crate::utils::error::KohakuError;
 
@@ -15,7 +14,7 @@ const HEARTBEAT_INTERVAL_SEC: u64 = 30;
 const HEARTBEAT_MAX_MISSED: i32 = 3;
 
 pub struct WsConnectionHandle {
-    pub uuid: Uuid,
+    pub key_id: i32,
     outgoing_w: UnboundedSender<Message>,
     pub shutdown_w: broadcast::Sender<()>,
     pub shutdown_r: broadcast::Receiver<()>,
@@ -34,8 +33,8 @@ impl WsConnectionHandle {
 
     pub fn disconnect(&self) -> Result<(), KohakuError> {
         info!(
-            "[WS - Connection] Closing connection with uuid '{}'",
-            self.uuid
+            "[WS - Connection] Closing connection with associated key id '{}'",
+            self.key_id
         );
         match self.shutdown_w.send(()) {
             Ok(_) => Ok(()),
@@ -48,7 +47,7 @@ impl WsConnectionHandle {
 }
 
 pub struct WsConnection {
-    pub uuid: Uuid,
+    pub key_id: i32,
     session: Session,
     incoming_r: MessageStream,
 
@@ -66,14 +65,14 @@ pub struct WsConnection {
 }
 
 impl WsConnection {
-    pub fn new(uuid: Uuid, session: Session, stream: MessageStream) -> Self {
+    pub fn new(key_id: i32, session: Session, stream: MessageStream) -> Self {
         let (shutdown_w, shutdown_r) = broadcast::channel(1);
         let (outgoing_w, outgoing_r) = unbounded_channel();
         let (heartbeat_w, heartbeat_r) = unbounded_channel();
         let (incoming_w, incoming_rx) = unbounded_channel();
 
         Self {
-            uuid,
+            key_id,
             session,
             incoming_r: stream,
             outgoing_w,
@@ -89,7 +88,7 @@ impl WsConnection {
 
     pub fn get_handle(&self) -> WsConnectionHandle {
         WsConnectionHandle {
-            uuid: self.uuid,
+            key_id: self.key_id.clone(),
             outgoing_w: self.outgoing_w.clone(),
             shutdown_w: self.shutdown_w.clone(),
             shutdown_r: self.shutdown_r.resubscribe(),
@@ -97,7 +96,7 @@ impl WsConnection {
     }
 
     pub async fn run(self) {
-        let uuid = self.uuid;
+        let key_id = self.key_id;
         let shutdown_w = self.shutdown_w.clone();
 
         // Spawn outgoing message handler
@@ -110,13 +109,13 @@ impl WsConnection {
             loop {
                 tokio::select! {
                     _ = shutdown_r_out.recv() => {
-                        info!("[WS - Connection] Shutdown received for '{}'. Closing internal channel.", uuid);
+                        info!("[WS - Connection] Shutdown received for '{}'. Closing internal channel.", key_id);
                         outgoing_r.close();
                     }
 
                     Some(msg) = outgoing_r.recv() => {
                         if let Err(e) = Self::handle_outgoing(session_out.clone(), msg).await {
-                            info!("[WS - Connection] Failed to send, closing for '{}' - Error : {}", uuid, e);
+                            info!("[WS - Connection] Failed to send, closing for '{}' - Error : {}", key_id, e);
                             if let Err(e) = shutdown_w_out.send(()) {
                                 error!("[WS - Connection] Failed to queue shutdown message: {}", e);
                             }
@@ -125,7 +124,7 @@ impl WsConnection {
                     }
 
                     else => {
-                        info!("[WS - Connection] Internal channel closed for {}", uuid);
+                        info!("[WS - Connection] Internal channel closed for {}", key_id);
                         break;
                     }
                 }
@@ -143,13 +142,13 @@ impl WsConnection {
             loop {
                 tokio::select! {
                     _ = shutdown_r_htbt.recv() => {
-                        info!("[WS - Connection] Shutdown received for '{}'. Closing heartbeat channel.", uuid);
+                        info!("[WS - Connection] Shutdown received for '{}'. Closing heartbeat channel.", key_id);
                         htbt_r.close();
                     }
 
                     _ = tokio::time::sleep(htbt_interval) => {
                         if missed_pings >= HEARTBEAT_MAX_MISSED {
-                            info!("[WS - Connection] Client missed too many heartbeats, starting disconnect for '{}'", uuid);
+                            info!("[WS - Connection] Client missed too many heartbeats, starting disconnect for '{}'", key_id);
                             if let Err(e) = shutdown_w_htbt.send(()) {
                                 error!("[WS - Connection] Failed to queue shutdown message: {}", e);
                             }
@@ -171,7 +170,7 @@ impl WsConnection {
                     }
 
                     else => {
-                        info!("[WS - Connection] Heartbeat channel closed for {}", uuid);
+                        info!("[WS - Connection] Heartbeat channel closed for {}", key_id);
                         break;
                     }
                 }
@@ -188,13 +187,13 @@ impl WsConnection {
             loop {
                 tokio::select! {
                     _ = shutdown_r_in.recv() => {
-                        info!("[WS - Connection] Shutdown received for '{}'. Closing external channel.", uuid);
+                        info!("[WS - Connection] Shutdown received for '{}'. Closing external channel.", key_id);
                         break;
                     }
 
                     Some(Ok(msg)) = incoming_r.recv() => {
                         if !Self::handle_incoming(session_in.clone(), htbt_w_in.clone(), msg).await {
-                            info!("[WS - Connection] Client requested close for '{}'.", uuid);
+                            info!("[WS - Connection] Client requested close for '{}'.", key_id);
                             if let Err(e) = shutdown_w_in.send(()) {
                                 error!("[WS - Connection] Failed to queue shutdown message: {}", e);
                             }
@@ -203,7 +202,7 @@ impl WsConnection {
                     }
 
                     else => {
-                        info!("[WS - Connection] External channel closed for {}", uuid);
+                        info!("[WS - Connection] External channel closed for {}", key_id);
                         break;
                     }
                 }
@@ -212,7 +211,7 @@ impl WsConnection {
             let _ = self.session.close(None).await;
             info!(
                 "[WS - Connection] Client connection to '{}' closed entirely.",
-                uuid
+                key_id
             );
         });
     }

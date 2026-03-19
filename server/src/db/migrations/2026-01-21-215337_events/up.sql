@@ -11,11 +11,11 @@ CREATE INDEX idx_topics_name ON topics(name);
 CREATE TABLE subscriptions (
   id SERIAL PRIMARY KEY,
   topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
-  target_uuid UUID NOT NULL,
+  key_id INTEGER NOT NULL REFERENCES api_keys(id),
   target_data JSONB,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  UNIQUE (topic_id, target_uuid, target_data)
+  UNIQUE (topic_id, key_id, target_data)
 );
 
-CREATE INDEX idx_subscriptions_target_uuid ON subscriptions(target_uuid);
+CREATE INDEX idx_subscriptions_key_id ON subscriptions(key_id);
