@@ -2,15 +2,10 @@
 // TODO: Remove it, when everything is actually used
 #![allow(dead_code)]
 
-use serde_json::{json, Value};
 use tracing::{error, info};
 
 use crate::utils::{
-    comm::{
-        auth::jwt::init_jwtservice,
-        events::dispatcher::notify,
-        websocket::manager::{get_manager, init_manager},
-    },
+    comm::{auth::jwt::init_jwtservice, websocket::manager::init_manager},
     config::Config,
     scheduler::{get_scheduler, init_scheduler},
 };

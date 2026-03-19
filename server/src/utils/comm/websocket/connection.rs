@@ -88,7 +88,7 @@ impl WsConnection {
 
     pub fn get_handle(&self) -> WsConnectionHandle {
         WsConnectionHandle {
-            key_id: self.key_id.clone(),
+            key_id: self.key_id,
             outgoing_w: self.outgoing_w.clone(),
             shutdown_w: self.shutdown_w.clone(),
             shutdown_r: self.shutdown_r.resubscribe(),
