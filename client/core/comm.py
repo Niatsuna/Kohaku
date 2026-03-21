@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 
 import requests
 import websockets
@@ -30,6 +31,7 @@ class CommunicationHandler:
         self.heartbeat_timeout: int = 90
         self.websocket: ClientConnection | None = None
 
+        self.topic_registry: dict = {}
         self.load_tokens()
 
     def load_tokens(self) -> bool:
@@ -172,7 +174,7 @@ class CommunicationHandler:
 
         elif attempt == 1:
             # Access token failed in previous attempt -> Refresh
-            if not self.refresh_token():
+            if not self.refresh():
                 logger.error("[WS] Refreshing failed. Aborting connection attempt!")
                 return False
 
@@ -218,7 +220,13 @@ class CommunicationHandler:
                 message = await self.websocket.recv()
 
                 data: dict = json.loads(message)
-                await self.handle_server_message(data)
+                topic = data["topic"]
+                if topic in self.topic_registry:
+                    await self.topic_registry[topic](data)
+                else:
+                    logger.info(
+                        f"[Event] Received data for topic '{topic}', but no event handler can be found for this topic."
+                    )
         except websockets.exceptions.ConnectionClosed:
             logger.info("Connection closed by server")
             self.running = False
@@ -254,10 +262,14 @@ class CommunicationHandler:
             await self.disconnect()
             logger.info("WebSocket client shut down")
 
-    async def handle_server_message(self, data: dict):
-        """Process incoming server events"""
-        # TODO: Implement
-        logger.info(f"Process message: {data}")
+    # Event Handler Registry :
+    def register(self, topic: str, event_handler: Callable[[dict], None]):
+        """Registers a function as an event handler for a topic"""
+        self.topic_registry[topic] = event_handler
+
+    def unregister(self, topic: str):
+        """Unregistes a function as an event handler for a topic"""
+        del self.topic_registry[topic]
 
 
 handler: CommunicationHandler | None = None
