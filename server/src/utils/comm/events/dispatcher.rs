@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use serde_json::Value;
+use tracing::info;
 
 use crate::utils::{
     comm::{
@@ -31,6 +32,9 @@ pub async fn notify(
     let _ = get_topic(None, name.clone()).await?;
     let subs = get_subscription(name, None, None).await?;
     let grouped = subs.into_iter().into_group_map_by(|s| s.key_id);
+    let total = grouped.len();
+    let mut connected = 0;
+    let mut failed = 0;
     for (target, subs) in grouped {
         let target_data = subs
             .iter()
@@ -50,7 +54,17 @@ pub async fn notify(
         };
 
         let manager = get_manager()?;
-        manager.send_to_client(&target, &message).await?;
+        if manager.check_if_active(&target) {
+            connected += 1;
+            if manager.send_to_client(&target, &message).await.is_err() {
+                failed += 1;
+            }
+        }
+    }
+    if failed != 0 {
+        info!("Failed to notify {} out of {} connected clients for the topic '{}'. (Total subscriptions: {})", failed, connected, topic, total)
+    } else {
+        info!("Successfully notified {} out of {} connected clients for the topic '{}'. (Total subscriptions: {})", connected, connected, topic, total)
     }
     Ok(())
 }
