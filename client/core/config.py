@@ -19,7 +19,6 @@ class Config:
     server_ws_url: str
     server_api_url: str
     repo: str
-    owner_id: int
 
     logging_level: str = "INFO"
     color_default: int = 0x1B6C8E
