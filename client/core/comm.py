@@ -118,7 +118,7 @@ class CommunicationHandler:
         logger.error(f"Request failed ({data["status"]}) : {data["kind"]} : {data["message"]}")
         return response.status_code
 
-    def request(self, endpoint: str, secure_mode: bool = False, abort: bool = False) -> dict | None:
+    def request(self, endpoint: str, secure_mode: bool = False, attempt: int = 0) -> dict | None:
         """
         Requests a resource at a given endpoint.
 
@@ -137,87 +137,48 @@ class CommunicationHandler:
             return None
 
         # Secure Mode =============================
-        if self.token is not None:
-            if "access_token" not in self.tokens:
-                logger.error("Invalid token structure detected! Relog and updating token storage")
-            else:
-                # Access Token available
-                token = self.tokens["access_token"]
-                response = self.__request(url, token)
-                if isinstance(response, int):
-                    # Error occured -> If unauthorized (401) the access token may be expired
-                    if response == 401:
-                        logger.warning(
-                            "Access failed: Token may be expired. Refreshing and trying again!"
-                        )
-                        try:
-                            token = self.refresh_token()
-                            response = self.__request(url, token)
-                        except requests.HTTPError as e:
-                            response = e.response.status_code
-
-                        if isinstance(response, int):
-                            logger.warning(
-                                "Access failed: Refresh token may be expired or other problem may lay at hand. Try to re-login"
-                            )
-                        else:
-                            return response
-                    else:
-                        logger.error(
-                            f"Access failed: Unexpected error occured during request ({response}). Aborting request."
-                        )
-                        return None
-                else:
-                    # Success
-                    return response
-
-        # Logging in
-        if self.api_key is not None:
-            try:
-                token = self.login()
-                response = self.__request(url, token)
-            except requests.HTTPError as e:
-                response = e.response.status_code
-
-            if isinstance(response, int):
-                # Error occured -> If unauthorized (401), API Key invalid
-                if response == 401:
-                    logger.error("Access failed: API key invalid!")
-                else:
-                    logger.error(
-                        f"Access failed: Unexpected error occured during request ({response})."
-                    )
+        if self.access_token is None or attempt > 1:
+            if not self.login():
+                logger.error("[Request] Unable to login. Aborting request attempt!")
                 return None
+        elif attempt == 1 and not self.refresh():
+            logger.error("[Request] Unable to refresh jwt tokens. Trying again after login ...")
+            return self.request(endpoint, secure_mode, attempt=2)
+
+        # Attempt request
+        if self.access_token is not None:
+            response = self.__request(url, self.access_token)
+            if isinstance(response, int):
+                if attempt > 1:
+                    logger.error("[Request] Failed after re-log. Aborting request attempt")
+                    return None
+                return self.request(endpoint, secure_mode, attempt=attempt + 1)
             return response
-        logger.warning("Access failed: Secure mode enabled, but no credentials found!")
-        return None
+        logger.error("[Request] No available access token. Trying again after login ...")
+        return self.request(endpoint, secure_mode, attempt=2)
 
     # Websocket Connection :
     async def connect(self, attempt: int = 0) -> bool:
         """Establish Websocket connection with JWT Token in header"""
-        if self.tokens is None or attempt > 1:
+        if self.access_token is None or attempt > 1:
             # No tokens / Refreshing failed -> Login
             if self.api_key is None:
                 logger.error("[WS] No credentials available. Aborting connection attempt!")
                 return False
-            try:
-                self.login()
-            except Exception:
+
+            if not self.login():
                 logger.error("[WS] Login failed. Aborting connection attempt!")
                 return False
 
         elif attempt == 1:
             # Access token failed in previous attempt -> Refresh
-            try:
-                self.refresh_token()
-            except Exception:
+            if not self.refresh_token():
                 logger.error("[WS] Refreshing failed. Aborting connection attempt!")
                 return False
 
         # Attempt connection
-        if self.tokens is not None and "access_token" in self.tokens:
-            token = self.tokens["access_token"]
-            headers = {"Authorization": f"Bearer {token}"}
+        if self.access_token is not None:
+            headers = {"Authorization": f"Bearer {self.access_token}"}
             try:
                 self.websocket = await connect(self.ws_url, additional_headers=headers)
                 self.running = True
