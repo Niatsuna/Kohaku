@@ -5,7 +5,7 @@ use tracing_subscriber::FmtSubscriber;
 use crate::{
     db::migrate,
     utils::{
-        comm,
+        comm::{self, events},
         config::{get_config, init_config},
         initialize_services,
     },
@@ -44,7 +44,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .service(
                 web::scope("/api")
-                    .service(web::scope("/auth").configure(comm::auth::routes::configure)),
+                    .service(web::scope("/auth").configure(comm::auth::routes::configure))
+                    .service(web::scope("/events").configure(events::configure)),
             )
             .route("/ws", web::get().to(comm::websocket::routes::ws_handler))
     })

@@ -36,7 +36,7 @@ pub async fn initialize_services(config: &Config) {
             );
         } else {
             info!("Scheduler started!");
-            // TODO: Add default tasks here!
+            //TODO: Add default tasks here!
         }
     }
 

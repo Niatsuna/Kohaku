@@ -1,5 +1,4 @@
 import hashlib
-import json
 import logging
 import re
 from datetime import datetime
@@ -10,6 +9,7 @@ from disnake.ext import commands
 
 from core.client import Client
 from utils.decorators import metadata
+from utils.files import load_file
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 class MagicEightBallCommand(commands.Cog):
     def __init__(self, client: Client):
         self.client = client
-
-        with open("./data/8ball_answers.json") as f:
-            self.answers: list[list[str]] = json.load(f)
+        self.answers: list[list[str]] = load_file("./data/8ball_answers.json")
 
     @commands.command(name="8b")
     @commands.cooldown(1, 2, commands.BucketType.user)

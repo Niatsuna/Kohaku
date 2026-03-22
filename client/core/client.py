@@ -1,9 +1,10 @@
+import asyncio
 import logging
 from pathlib import Path
 
 from disnake.ext import commands
 
-from core.comm import get_wsclient
+from core.comm import get_comm_handler
 from core.config import Config
 
 logger = logging.getLogger(__name__)
@@ -15,10 +16,11 @@ class Client(commands.Bot):
     def __init__(self, config: Config, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = config
-        self.websocket = None
 
     async def load_features(self):
         """Loads features like the commands and the websocket"""
+        # Communication Handler (Init)
+        comm = get_comm_handler()
         # Cogs ( = Commands)
         logger.info("Loading cogs...")
 
@@ -34,8 +36,7 @@ class Client(commands.Bot):
         logger.info(f"Loaded {len(self.extensions)} cogs")
 
         # Websocket ( = Communication to backend)
-        wsclient = get_wsclient()
-        await wsclient.run()
+        asyncio.create_task(comm.run())
 
     async def on_ready(self):
         await self.load_features()
@@ -45,6 +46,8 @@ class Client(commands.Bot):
 
     async def close(self):
         logger.info("Shutting down bot...")
-        if self.websocket is not None:
-            await self.websocket.stop()
+
+        comm = get_comm_handler()
+        await comm.disconnect()
+
         await super().close()

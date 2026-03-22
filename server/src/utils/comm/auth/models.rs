@@ -106,7 +106,7 @@ pub async fn create_apikey(
 
 /// Gets an entry for an identifieable API key in the database
 ///
-/// `id` will be one either 0 or 1 entry, while `key_prefix` is not unique and therefore can result in n entries.
+/// `id` will be either 0 or 1 entry, while `key_prefix` is not unique and therefore can result in n entries.
 /// # Parameters
 /// - `id_` : Serial primary key of the database. Either this or `key_prefix` must be set
 /// - `key_prefix_` : 10-char long [`String`] prefix of the actual full key. Either this or `id` must be set

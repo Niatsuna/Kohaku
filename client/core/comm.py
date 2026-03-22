@@ -1,53 +1,216 @@
 import asyncio
+import json
 import logging
-from pathlib import Path
+from collections.abc import Callable
 
+import requests
 import websockets
 from websockets.asyncio.client import ClientConnection, connect
 
 from core.config import get_config
+from utils.files import load_file, read_secret, store_file
 
 logger = logging.getLogger(__name__)
 
+API_AUTH_LOGIN = "/auth/login"
+API_AUTH_REFRESH = "/auth/manage/refresh"
+FILE_APIKEY = ".secret"
+FILE_TOKENS = ".session"
 
-class WsClient:
-    def __init__(self, url: str):
-        self.url: str = url
-        self.api_key: str | None = self.load_api_key()
-        self.websocket: ClientConnection | None = None
+
+class CommunicationHandler:
+    def __init__(self, api_url: str, ws_url: str):
+        self.url: str = api_url
+        self.ws_url: str = ws_url
+
+        self.api_key: str | None = read_secret(FILE_APIKEY)
+        self.access_token: str | None = None
+        self.refresh_token: str | None = None
+
         self.running: bool = False
         self.heartbeat_timeout: int = 90
+        self.websocket: ClientConnection | None = None
 
-    def load_api_key(self) -> str | None:
-        """Load API key from .secret file"""
-        secret_path = Path(".secret")
-        if not secret_path.exists():
-            logger.error(f"Secret file '{secret_path}' not found")
-            return None
+        self.topic_registry: dict = {}
+        self.load_tokens()
 
+    def load_tokens(self) -> bool:
+        """
+        Loads access and refresh token from file.
+
+        Returns boolean indicating if loading and storing resulted in useable tokens.
+        """
+        session = load_file(FILE_TOKENS)
+
+        if session is not None and "access_token" in session and "refresh_token" in session:
+            self.access_token = session["access_token"]
+            self.refresh_token = session["refresh_token"]
+            if self.access_token is not None and self.refresh_token is not None:
+                return True
+            logger.error("Failed to load jwt tokens: Invalid stored values (None)")
+        elif session is None:
+            logger.error(f"Failed to load '{FILE_TOKENS}': File does not exist")
+        else:
+            logger.error("Failed to load jwt tokens: Invalid file format found!")
+        self.access_token = None
+        self.refresh_token = None
+        return False
+
+    def login(self) -> bool:
+        """
+        Authenticates the client using the API Key and stores the returned tokens.
+
+        Returns boolean indicating if login was successful and useable tokens were returned.
+        """
+        url = self.url + API_AUTH_LOGIN
+        headers = {"X-API-Key": self.api_key}
+
+        response = requests.post(url, headers=headers)
         try:
-            api_key = secret_path.read_text().strip()
-            if not api_key:
-                logger.error(f"Secret file '{secret_path}' is empty")
-                return None
-            logger.info("API key loaded successfully")
-            return api_key
-        except Exception as e:
-            logger.error(f"Failed to read secret file: {e}")
+            data = response.json()
+        except Exception:
+            data = {"status": response.status_code, "kind": "unknown", "message": "unknown"}
+
+        if response.status_code == 200:
+            store_file(FILE_TOKENS, data)
+            return self.load_tokens()
+        logger.error(f"Login failed ({data["status"]}) - {data["kind"]} : {data["message"]}")
+        return False
+
+    def refresh(self) -> bool:
+        """
+        Refreshes the jwt tokens and stores them.
+
+        Returns boolean indicating if refresh was successful and useable tokens were returned.
+        """
+        url = self.url + API_AUTH_REFRESH
+        headers = {"Authorization": f"Bearer {self.refresh_token}"}
+
+        response = requests.post(url, headers=headers)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"status": response.status_code, "kind": "unknown", "message": "unknown"}
+
+        if response.status_code == 200:
+            data["refresh_token"] = self.refresh_token
+            store_file(FILE_TOKENS, data)
+            return self.load_tokens()
+        logger.error(f"Refresh failed ({data["status"]}) - {data["kind"]} : {data["message"]}")
+        return False
+
+    def __request(self, url: str, token: str) -> dict | int:
+        """
+        Request a given endpoint with a given token.
+        Is being used in `request(...)`.
+
+        Will return json body of response or the status code if an error occured.
+        """
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = requests.get(url, headers=headers)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"status": response.status_code, "kind": "unknown", "message": "unknown"}
+
+        if response.status_code == 200:
+            return response.json()
+
+        logger.error(f"Request failed ({data["status"]}) : {data["kind"]} : {data["message"]}")
+        return response.status_code
+
+    def request(self, endpoint: str, secure_mode: bool = False, attempt: int = 0) -> dict | None:
+        """
+        Requests a resource at a given endpoint.
+
+        If secure mode is activated, use the stored access token.
+        Try to refresh or login if failing in secure mode.
+
+        Returns responses json body or None if an error occured
+        """
+        url = self.url + endpoint
+
+        # Normal Mode =============================
+        if not secure_mode:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
             return None
 
-    async def connect(self) -> bool:
-        """Establish WebSocket connection with API key in header"""
-        if self.api_key is not None:
-            headers = {"X-API-Key": self.api_key}
+        # Secure Mode =============================
+        if self.access_token is None or attempt > 1:
+            if not self.login():
+                logger.error("[Request] Unable to login. Aborting request attempt!")
+                return None
+        elif attempt == 1 and not self.refresh():
+            logger.error("[Request] Unable to refresh jwt tokens. Trying again after login ...")
+            return self.request(endpoint, secure_mode, attempt=2)
+
+        # Attempt request
+        if self.access_token is not None:
+            response = self.__request(url, self.access_token)
+            if isinstance(response, int):
+                if attempt > 1:
+                    logger.error("[Request] Failed after re-log. Aborting request attempt")
+                    return None
+                return self.request(endpoint, secure_mode, attempt=attempt + 1)
+            return response
+        logger.error("[Request] No available access token. Trying again after login ...")
+        return self.request(endpoint, secure_mode, attempt=2)
+
+    # Websocket Connection :
+    async def connect(self, attempt: int = 0) -> bool:
+        """Establish Websocket connection with JWT Token in header"""
+        if self.access_token is None or attempt > 1:
+            # No tokens / Refreshing failed -> Login
+            if self.api_key is None:
+                logger.error("[WS] No credentials available. Aborting connection attempt!")
+                return False
+
+            if not self.login():
+                logger.error("[WS] Login failed. Aborting connection attempt!")
+                return False
+
+        elif attempt == 1:
+            # Access token failed in previous attempt -> Refresh
+            if not self.refresh():
+                logger.error("[WS] Refreshing failed. Aborting connection attempt!")
+                return False
+
+        # Attempt connection
+        if self.access_token is not None:
+            headers = {"Authorization": f"Bearer {self.access_token}"}
             try:
-                self.websocket = await connect(self.url, additional_headers=headers)
+                self.websocket = await connect(self.ws_url, additional_headers=headers)
                 self.running = True
-                logger.info(f"Connected to {self.url}")
+                logger.info(f"[WS] Connected to {self.ws_url}")
                 return True
             except Exception as e:
-                logger.error(f"Failed to connect: {e}")
-                return False
+                logger.error(f"[WS] Failed to connect {e}")
+                if attempt == 0:
+                    logger.info("[WS] Try again after refreshing the tokens ...")
+                    return await self.connect(attempt=1)
+                if attempt == 1:
+                    logger.info("[WS] Try again after relogging into backend service ...")
+                    return await self.connect(attempt=2)
+                logger.info("[WS] Aborting connection attempt!")
+        else:
+            logger.error("[WS] Invalid token format - Tokens must meet JWT standard!")
+        return False
+
+    async def disconnect(self) -> bool:
+        """Disconnect current Websocket connection"""
+        if self.running or self.websocket:
+            try:
+                self.running = False
+                if self.websocket:
+                    await self.websocket.close(1000, "Requested Disconnect")
+                    self.websocket = None
+                logger.info(f"[WS] Disconnected from {self.ws_url}")
+                return True
+            except Exception as e:
+                logger.error(f"[WS] Failed to disconnect: {e}")
         return False
 
     async def receive_task(self):
@@ -55,9 +218,15 @@ class WsClient:
         try:
             while self.running and self.websocket:
                 message = await self.websocket.recv()
-                if isinstance(message, str):
-                    logger.info("Received event message from server")
-                    await self.handle_server_message(message)
+
+                data: dict = json.loads(message)
+                topic = data["topic"]
+                if topic in self.topic_registry:
+                    await self.topic_registry[topic](data)
+                else:
+                    logger.info(
+                        f"[Event] Received data for topic '{topic}', but no event handler can be found for this topic."
+                    )
         except websockets.exceptions.ConnectionClosed:
             logger.info("Connection closed by server")
             self.running = False
@@ -67,7 +236,6 @@ class WsClient:
     async def heartbeat_task(self):
         """Monitor server activity and close if no response"""
         last_activity = asyncio.get_event_loop().time()
-
         while self.running and self.websocket:
             await asyncio.sleep(30)
             current_time = asyncio.get_event_loop().time()
@@ -75,11 +243,10 @@ class WsClient:
             if current_time - last_activity > self.heartbeat_timeout:
                 logger.warning("No server activity detected, closing connection")
                 self.running = False
-                if self.websocket:
-                    await self.websocket.close()
+                await self.disconnect()
                 break
 
-            if self.websocket and not self.websocket.closed:
+            if self.websocket is not None:
                 last_activity = current_time
 
     async def run(self):
@@ -92,23 +259,26 @@ class WsClient:
             # Ping/Pong get automatically handled by the websockets library
             await asyncio.gather(self.receive_task(), self.heartbeat_task(), return_exceptions=True)
         finally:
-            if self.websocket:
-                await self.websocket.close()
+            await self.disconnect()
             logger.info("WebSocket client shut down")
 
-    async def handle_server_message(self, message: str):
-        """Process incoming server events"""
-        # TODO: Implement
-        logger.info(f"Process message: {message}")
+    # Event Handler Registry :
+    def register(self, topic: str, event_handler: Callable[[dict], None]):
+        """Registers a function as an event handler for a topic"""
+        self.topic_registry[topic] = event_handler
+
+    def unregister(self, topic: str):
+        """Unregistes a function as an event handler for a topic"""
+        del self.topic_registry[topic]
 
 
-wsclient: WsClient | None = None
+handler: CommunicationHandler | None = None
 
 
-def get_wsclient():
-    """Get the global WsClient"""
-    global wsclient
-    if wsclient is None:
+def get_comm_handler() -> CommunicationHandler:
+    """Get the global authentication handler for requesting anything from the backend"""
+    global handler
+    if handler is None:
         config = get_config()
-        wsclient = WsClient(config.server_ws_url)
-    return wsclient
+        handler = CommunicationHandler(config.server_api_url, config.server_ws_url)
+    return handler
