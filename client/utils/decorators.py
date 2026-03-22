@@ -28,7 +28,7 @@ def requires_websocket(func):
 
     @wraps(func)
     async def wrapper(self, ctx, *args, **kwargs):
-        if not ctx.bot.websocket or not ctx.bot.websocket.connected:
+        if not ctx.bot.websocket or not ctx.bot.websocket.running:
             embed = Embed(
                 description="❌ Backend connection unavailable. Please try again later!",
                 color=CONFIG.color_error,
