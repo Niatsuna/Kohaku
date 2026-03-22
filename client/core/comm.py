@@ -65,15 +65,15 @@ class CommunicationHandler:
         url = self.url + API_AUTH_LOGIN
         headers = {"X-API-Key": self.api_key}
 
-        response = requests.post(url, headers=headers)
         try:
+            response = requests.post(url, headers=headers, timeout=3)
             data = response.json()
-        except Exception:
-            data = {"status": response.status_code, "kind": "unknown", "message": "unknown"}
 
-        if response.status_code == 200:
-            store_file(FILE_TOKENS, data)
-            return self.load_tokens()
+            if response.status_code == 200:
+                store_file(FILE_TOKENS, data)
+                return self.load_tokens()
+        except Exception:
+            data = {"status": 500, "kind": "unknown", "message": "unknown"}
         logger.error(f"Login failed ({data["status"]}) - {data["kind"]} : {data["message"]}")
         return False
 
@@ -86,16 +86,19 @@ class CommunicationHandler:
         url = self.url + API_AUTH_REFRESH
         headers = {"Authorization": f"Bearer {self.refresh_token}"}
 
-        response = requests.post(url, headers=headers)
         try:
+            response = requests.post(url, headers=headers, timeout=3)
             data = response.json()
-        except Exception:
-            data = {"status": response.status_code, "kind": "unknown", "message": "unknown"}
 
-        if response.status_code == 200:
-            data["refresh_token"] = self.refresh_token
-            store_file(FILE_TOKENS, data)
-            return self.load_tokens()
+            if response.status_code == 200:
+                store_file(FILE_TOKENS, data)
+                return self.load_tokens()
+        except Exception:
+            data = {
+                "status": 504,
+                "kind": "Bad Gateway",
+                "message": "The server is currently unavailable or returns a invalid json response.",
+            }
         logger.error(f"Refresh failed ({data["status"]}) - {data["kind"]} : {data["message"]}")
         return False
 
@@ -108,17 +111,26 @@ class CommunicationHandler:
         """
         headers = {"Authorization": f"Bearer {token}"}
 
-        response = requests.get(url, headers=headers)
         try:
+            status = 504
+            response = requests.get(url, headers=headers, timeout=5)
             data = response.json()
+            status = data["status"]
+
+            if response.status_code == 200:
+                return response.json()
         except Exception:
-            data = {"status": response.status_code, "kind": "unknown", "message": "unknown"}
-
-        if response.status_code == 200:
-            return response.json()
-
+            (kind, message) = (
+                (
+                    "Bad Gateway",
+                    "The server is currently unavailable or returns a invalid json response.",
+                )
+                if status == 504
+                else (data["kind"], data["message"])
+            )
+            data = {"status": status, "kind": kind, "message": message}
         logger.error(f"Request failed ({data["status"]}) : {data["kind"]} : {data["message"]}")
-        return response.status_code
+        return None
 
     def request(self, endpoint: str, secure_mode: bool = False, attempt: int = 0) -> dict | None:
         """
