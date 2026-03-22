@@ -15,7 +15,9 @@ pub mod dispatcher;
 pub mod models;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.route("/topics", web::get().to(get_topics));
+    cfg.route("/topics", web::get().to(get_topics))
+        .route("/subscribe", web::post().to(subscribe))
+        .route("/unsubscribe", web::post().to(unsubscribe));
 }
 
 /// Get all available topics (Endpoint)
