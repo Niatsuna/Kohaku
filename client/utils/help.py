@@ -175,7 +175,7 @@ class KohakuHelpCommand(commands.HelpCommand):
             if cmd_desc is not None:
                 if len(cmd_desc) > 60:
                     # Shorten description
-                    i = cmd_desc.rfind(" ", start=50)
+                    i = cmd_desc.rfind(" ", 50)
                     if i == -1:
                         # One long word
                         i = 55
