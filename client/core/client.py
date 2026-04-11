@@ -2,6 +2,7 @@ import asyncio
 import logging
 from pathlib import Path
 
+from disnake import Embed
 from disnake.ext import commands
 
 from core.comm import get_comm_handler
@@ -43,6 +44,22 @@ class Client(commands.Bot):
 
         logger.info(f"Kohaku is ready! Logged in as {self.user}")
         logger.info(f"Connected to {len(self.guilds)} guilds")
+
+    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
+        if isinstance(error, commands.CommandNotFound):
+            return
+
+        embed = Embed(color=self.config.color_error)
+        if isinstance(error, commands.MissingRequiredArgument):
+            embed.description = f"❌ Missing argument! Please refer to `{self.config.prefix}help {ctx.command}` for more information"
+        elif isinstance(error, commands.CommandOnCooldown):
+            embed.description = "❌ Command is currently on cooldown. Please try again later!"
+        elif isinstance(error, commands.CheckFailure):
+            embed.description = "❌ Permission denied!"
+        else:
+            logger.error(f"Unhandled error in '{ctx.command}'", exc_info=error)
+            embed.description = f"❌ Unhandled error in '{ctx.command}'. Please inform an admin!"
+        await ctx.send(embed=embed)
 
     async def close(self):
         logger.info("Shutting down bot...")
