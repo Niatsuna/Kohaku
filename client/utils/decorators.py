@@ -1,6 +1,7 @@
 from functools import wraps
 
-from disnake import Embed
+from disnake import Embed, channel
+from disnake.ext import commands
 
 from core.config import get_config
 
@@ -32,6 +33,24 @@ def requires_websocket(func):
             embed = Embed(
                 description="❌ Backend connection unavailable. Please try again later!",
                 color=CONFIG.color_error,
+            )
+            await ctx.send(embed=embed)
+            return None
+        return await func(self, ctx, *args, **kwargs)
+
+    return wrapper
+
+
+def is_in_dm(func):
+    """
+    Decorator to attach direct messaging channel as a requirement to commands
+    """
+
+    @wraps(func)
+    async def wrapper(self, ctx: commands.Context, *args, **kwargs):
+        if not isinstance(ctx.channel, channel.DMChannel):
+            embed = Embed(
+                description="❌ This command is only available in DMs!", color=CONFIG.color_error
             )
             await ctx.send(embed=embed)
             return None
