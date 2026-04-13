@@ -22,7 +22,7 @@ services:
       - SERVER_ADDR=localhost
       - SERVER_PORT=${SERVER_PORT}
       - SERVER_ENCRYPTION_KEY=${SERVER_ENCRYPTION_KEY}
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PWD}@postgres/kohaku
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PWD}@postgres/${POSTGRES_DB}
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}"
 
@@ -32,7 +32,6 @@ services:
     depends_on:
       - kohaku-server
     environment:
-      - OWNER_ID=${OWNER_ID}
       - SERVER_WS_URL=ws://kohaku-server:${SERVER_PORT}/ws
       - SERVER_API_URL=http://kohaku-server:${SERVER_PORT}/api
       - CLIENT_LOGGING_LEVEL=${CLIENT_LOGGING_LEVEL}
