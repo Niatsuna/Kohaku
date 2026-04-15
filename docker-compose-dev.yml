@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PWD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    
+  testdb:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PWD}
+      - POSTGRES_DB=${POSTGRES_DB}_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  kohaku-server:
+    build: server/
+    restart: unless-stopped
+    environment:
+      - BOOTSTRAP_KEY=${BOOTSTRAP_KEY}
+      - SERVER_LOGGING_LEVEL=${SERVER_LOGGING_LEVEL}
+      - SERVER_ADDR=localhost
+      - SERVER_PORT=${SERVER_PORT}
+      - SERVER_ENCRYPTION_KEY=${SERVER_ENCRYPTION_KEY}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PWD}@postgres/${POSTGRES_DB}
+      - TEST_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PWD}@testdb:5433/${POSTGRES_DB}_test
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+
+  kohaku-client:
+    build: client/
+    restart: unless-stopped
+    depends_on:
+      - kohaku-server
+    environment:
+      - SERVER_WS_URL=ws://kohaku-server:${SERVER_PORT}/ws
+      - SERVER_API_URL=http://kohaku-server:${SERVER_PORT}/api
+      - CLIENT_LOGGING_LEVEL=${CLIENT_LOGGING_LEVEL}
+      - CLIENT_PREFIX=${CLIENT_PREFIX}
+      - CLIENT_TOKEN=${CLIENT_TOKEN}
