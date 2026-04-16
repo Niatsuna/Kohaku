@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     db::{
-        self, get_connection,
+        self,
         schema::{self},
+        Connection,
     },
     utils::error::KohakuError,
 };
@@ -67,6 +68,7 @@ pub struct NewApiKey {
 /// Creates an entry for the API key in the database
 ///
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `hashed_key` : Hashed [`String`] presentation of the actual full key
 /// - `key_prefix` : 10-char long [`String`] prefix of the actual full key
 /// - `owner` : [`String`] identifier of the service or user that uses this API key
@@ -78,6 +80,7 @@ pub struct NewApiKey {
 /// - [`Err`] : A [enum@KohakuError] based on the failing operation.
 ///
 pub async fn create_apikey(
+    conn: &mut Connection,
     hashed_key: String,
     key_prefix: String,
     owner: String,
@@ -89,8 +92,6 @@ pub async fn create_apikey(
         }
     }
 
-    let mut conn = get_connection()?;
-
     let new_key = NewApiKey {
         hashed_key,
         key_prefix,
@@ -100,7 +101,7 @@ pub async fn create_apikey(
 
     diesel::insert_into(schema::api_keys::table)
         .values(&new_key)
-        .get_result(&mut conn)
+        .get_result(conn)
         .map_err(KohakuError::DatabaseQueryError)
 }
 
@@ -108,6 +109,7 @@ pub async fn create_apikey(
 ///
 /// `id` will be either 0 or 1 entry, while `key_prefix` is not unique and therefore can result in n entries.
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `id_` : Serial primary key of the database. Either this or `key_prefix` must be set
 /// - `key_prefix_` : 10-char long [`String`] prefix of the actual full key. Either this or `id` must be set
 ///
@@ -116,6 +118,7 @@ pub async fn create_apikey(
 /// - [`Ok`] : The identified [struct@ApiKey]s that matches either `id` and/or `key_prefix` inside a vector
 /// - [`Err`] : A [enum@KohakuError] based on the failing operation
 pub async fn get_apikey(
+    conn: &mut Connection,
     id_: Option<i32>,
     key_prefix_: Option<String>,
 ) -> Result<Vec<ApiKey>, KohakuError> {
@@ -123,7 +126,6 @@ pub async fn get_apikey(
     if id_.is_none() && key_prefix_.is_none() {
         return Err(KohakuError::ValidationError("Illegal Argument: At least one of the parameters - `id` and/or `key_prefix` must be set!".to_string()));
     }
-    let mut conn = get_connection()?;
     let mut query = api_keys.into_boxed();
 
     if let Some(i) = id_ {
@@ -134,14 +136,13 @@ pub async fn get_apikey(
         query = FilterDsl::filter(query, key_prefix.eq(kp));
     }
 
-    query
-        .load(&mut conn)
-        .map_err(KohakuError::DatabaseQueryError)
+    query.load(conn).map_err(KohakuError::DatabaseQueryError)
 }
 
 /// Removes an entry representing an API key from the database
 ///
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `id_` : Serial primary key of the database. Either this or `key_prefix` must be set
 /// - `key_prefix_` : 10-char long [`String`] prefix of the actual full key. Either this or `id` must be set
 ///
@@ -150,6 +151,7 @@ pub async fn get_apikey(
 /// - [`Ok`] : The API key was deleted from the database
 /// - [`Err`] : A [enum@KohakuError] based on the failing operation
 pub async fn delete_apikey(
+    conn: &mut Connection,
     id_: Option<i32>,
     key_prefix_: Option<String>,
 ) -> Result<(), KohakuError> {
@@ -157,7 +159,6 @@ pub async fn delete_apikey(
     if id_.is_none() && key_prefix_.is_none() {
         return Err(KohakuError::ValidationError("Illegal Argument: At least one of the parameters - `id` and/or `key_prefix` must be set!".to_string()));
     }
-    let mut conn = get_connection()?;
     let mut query = diesel::delete(api_keys).into_boxed();
 
     if let Some(i) = id_ {
@@ -169,7 +170,7 @@ pub async fn delete_apikey(
     }
 
     query
-        .execute(&mut conn)
+        .execute(conn)
         .map_err(KohakuError::DatabaseQueryError)?;
     Ok(())
 }

@@ -1,21 +1,24 @@
 use actix_web::{web, HttpRequest, HttpResponse};
 use tracing::info;
 
-use crate::utils::{
-    comm::{
-        auth::{
-            api_key::{extract_prefix, generate_key, hash_key, verify_key},
-            check_authorization_key, check_authorization_token, extract_key,
-            jwt::get_jwtservice,
-            models::{
-                create_apikey, delete_apikey, get_apikey, CreateKeyRequest, CreateKeyResponse,
-                RevokeKeyRequest, TokenResponse, TokenType,
+use crate::{
+    db::get_connection,
+    utils::{
+        comm::{
+            auth::{
+                api_key::{extract_prefix, generate_key, hash_key, verify_key},
+                check_authorization_key, check_authorization_token, extract_key,
+                jwt::get_jwtservice,
+                models::{
+                    create_apikey, delete_apikey, get_apikey, CreateKeyRequest, CreateKeyResponse,
+                    RevokeKeyRequest, TokenResponse, TokenType,
+                },
             },
+            websocket::manager::get_manager,
         },
-        websocket::manager::get_manager,
+        config::get_config,
+        error::KohakuError,
     },
-    config::get_config,
-    error::KohakuError,
 };
 
 /// Configures server so that requests get routed to the correct functions
@@ -54,7 +57,8 @@ async fn login(req: HttpRequest) -> Result<HttpResponse, KohakuError> {
         return Ok(HttpResponse::Ok().json(response));
     }
     // Check if API Key can be found in database
-    let verified_key = check_authorization_key(api_key).await?;
+    let mut conn = get_connection()?;
+    let verified_key = check_authorization_key(&mut conn, api_key).await?;
     let scopes = verified_key.scopes.clone();
     let response = service.create_tokens(verified_key.id, &verified_key.owner, scopes)?;
 
@@ -126,7 +130,9 @@ async fn create(
 
     let (key, prefix) = generate_key();
     let hashed_key = hash_key(&key)?;
+    let mut conn = get_connection()?;
     let _ = create_apikey(
+        &mut conn,
         hashed_key,
         prefix.clone(),
         body.owner.clone(),
@@ -171,12 +177,13 @@ async fn revoke(
     let key = body.api_key.clone();
 
     let prefix = extract_prefix(&key)?;
-    let candidates = get_apikey(None, Some(prefix.clone())).await?;
+    let mut conn = get_connection()?;
+    let candidates = get_apikey(&mut conn, None, Some(prefix.clone())).await?;
     for candidate in candidates {
         if let Ok(true) = verify_key(&key, &candidate.hashed_key) {
             // Found key: Remove it from database and blacklist it
             let key_id = candidate.id;
-            delete_apikey(Some(key_id), None).await?;
+            delete_apikey(&mut conn, Some(key_id), None).await?;
             service.blacklist_key(key_id, None).await?;
             info!("[Authentication] - API Key with prefix {} revoked!", prefix);
 

@@ -1,12 +1,15 @@
 use actix_web::HttpRequest;
 
-use crate::utils::{
-    comm::auth::{
-        api_key::{extract_prefix, verify_key},
-        jwt::get_jwtservice,
-        models::{get_apikey, ApiKey, Claims, TokenType},
+use crate::{
+    db::Connection,
+    utils::{
+        comm::auth::{
+            api_key::{extract_prefix, verify_key},
+            jwt::get_jwtservice,
+            models::{get_apikey, ApiKey, Claims, TokenType},
+        },
+        error::KohakuError,
     },
-    error::KohakuError,
 };
 
 pub mod api_key;
@@ -27,16 +30,20 @@ pub fn token_duration(token_type: &TokenType) -> usize {
 /// Checks if the given key is valid
 ///
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `key` - Prior generated API Key
 ///
 /// # Returns
 /// A [`Result`] which is either
 /// - [`Ok`] : [`ApiKey`] entry from the database indicating that this key is valid
 /// - [`Err`]: A [`KohakuError`] which indicates that ANY operation failed, the key is invalid
-pub async fn check_authorization_key(key: &str) -> Result<ApiKey, KohakuError> {
+pub async fn check_authorization_key(
+    conn: &mut Connection,
+    key: &str,
+) -> Result<ApiKey, KohakuError> {
     // Check if the key is valid
     let prefix = extract_prefix(key)?;
-    let candidates = get_apikey(None, Some(prefix)).await?;
+    let candidates = get_apikey(conn, None, Some(prefix)).await?;
 
     let mut verified_key = None;
     for candidate in candidates {
