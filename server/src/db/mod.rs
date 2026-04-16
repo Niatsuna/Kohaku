@@ -8,8 +8,7 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use once_cell::sync::Lazy;
 use tracing::info;
 
-#[cfg(not(test))]
-use crate::utils::config::get_config;
+use crate::utils::config::{get_config, init_config};
 use crate::utils::error::KohakuError;
 
 pub mod schema;
@@ -22,17 +21,9 @@ static DB_POLL: Lazy<Arc<Mutex<Pool>>> =
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/db/migrations");
 
-/// Will select DATABASE_URL in a non-test environment (cargo run)
-#[cfg(not(test))]
 fn get_database_url() -> String {
+    let _ = init_config();  // Note: For integration test compatibility
     get_config().database_url.clone()
-}
-
-/// WIll select TEST_DATABASE_URL in a test environment (cargo test)
-#[cfg(test)]
-fn get_database_url() -> String {
-    std::env::var("TEST_DATABASE_URL")
-        .expect("TEST_DATABASE_URL must be set for a testing environment")
 }
 
 fn establish_connection_pool() -> Pool {
