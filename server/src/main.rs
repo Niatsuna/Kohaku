@@ -2,7 +2,7 @@ use actix_web::{web, App, HttpServer};
 use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 
-use crate::{
+use kohaku::{
     db::migrate,
     utils::{
         comm::{self, events},
@@ -10,9 +10,6 @@ use crate::{
         initialize_services,
     },
 };
-
-mod db;
-mod utils;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
