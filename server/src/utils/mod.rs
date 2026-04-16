@@ -14,7 +14,6 @@ pub mod comm;
 pub mod config;
 pub mod error;
 pub mod scheduler;
-mod tests;
 
 /// Initializes globally accessible services like scheduler, jwtservice and websocket manager.
 ///

@@ -13,6 +13,7 @@ pub mod api_key;
 pub mod jwt;
 pub mod models;
 pub mod routes;
+mod tests;
 
 /// Helper: Quick lookup for token type duration (seconds)
 pub fn token_duration(token_type: &TokenType) -> usize {
