@@ -40,8 +40,7 @@ pub fn get_connection() -> Result<Connection, KohakuError> {
     pool.get().map_err(KohakuError::DatabaseConnectionError)
 }
 
-pub fn migrate() -> Result<(), KohakuError> {
-    let mut conn = get_connection()?;
+pub fn migrate(conn: &mut PgConnection) -> Result<(), KohakuError> {
     let mig = conn
         .run_pending_migrations(MIGRATIONS)
         .map_err(|e| KohakuError::ExternalServiceError(format!("Migration failed: {}", e)))?;

@@ -1,15 +1,13 @@
 use actix_web::HttpRequest;
+use diesel::PgConnection;
 
-use crate::{
-    db::Connection,
-    utils::{
-        comm::auth::{
-            api_key::{extract_prefix, verify_key},
-            jwt::get_jwtservice,
-            models::{get_apikey, ApiKey, Claims, TokenType},
-        },
-        error::KohakuError,
+use crate::utils::{
+    comm::auth::{
+        api_key::{extract_prefix, verify_key},
+        jwt::get_jwtservice,
+        models::{get_apikey, ApiKey, Claims, TokenType},
     },
+    error::KohakuError,
 };
 
 pub mod api_key;
@@ -30,7 +28,7 @@ pub fn token_duration(token_type: &TokenType) -> usize {
 /// Checks if the given key is valid
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 /// - `key` - Prior generated API Key
 ///
 /// # Returns
@@ -38,7 +36,7 @@ pub fn token_duration(token_type: &TokenType) -> usize {
 /// - [`Ok`] : [`ApiKey`] entry from the database indicating that this key is valid
 /// - [`Err`]: A [`KohakuError`] which indicates that ANY operation failed, the key is invalid
 pub async fn check_authorization_key(
-    conn: &mut Connection,
+    conn: &mut PgConnection,
     key: &str,
 ) -> Result<ApiKey, KohakuError> {
     // Check if the key is valid

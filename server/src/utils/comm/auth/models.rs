@@ -6,7 +6,6 @@ use crate::{
     db::{
         self,
         schema::{self},
-        Connection,
     },
     utils::error::KohakuError,
 };
@@ -38,7 +37,7 @@ pub struct RefreshRequest {
 // ========================================= API Keys ========================================== //
 
 /// Representation of database entry of a given ApiKey
-#[derive(Debug, Queryable, Selectable, Serialize, Deserialize, Clone)]
+#[derive(Debug, Queryable, Selectable, Serialize, Deserialize, Clone, PartialEq)]
 #[diesel(table_name = crate::db::schema::api_keys)]
 pub struct ApiKey {
     /// Serial Primary Key given by the database
@@ -68,7 +67,7 @@ pub struct NewApiKey {
 /// Creates an entry for the API key in the database
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 /// - `hashed_key` : Hashed [`String`] presentation of the actual full key
 /// - `key_prefix` : 10-char long [`String`] prefix of the actual full key
 /// - `owner` : [`String`] identifier of the service or user that uses this API key
@@ -80,7 +79,7 @@ pub struct NewApiKey {
 /// - [`Err`] : A [enum@KohakuError] based on the failing operation.
 ///
 pub async fn create_apikey(
-    conn: &mut Connection,
+    conn: &mut PgConnection,
     hashed_key: String,
     key_prefix: String,
     owner: String,
@@ -109,7 +108,7 @@ pub async fn create_apikey(
 ///
 /// `id` will be either 0 or 1 entry, while `key_prefix` is not unique and therefore can result in n entries.
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 /// - `id_` : Serial primary key of the database. Either this or `key_prefix` must be set
 /// - `key_prefix_` : 10-char long [`String`] prefix of the actual full key. Either this or `id` must be set
 ///
@@ -118,7 +117,7 @@ pub async fn create_apikey(
 /// - [`Ok`] : The identified [struct@ApiKey]s that matches either `id` and/or `key_prefix` inside a vector
 /// - [`Err`] : A [enum@KohakuError] based on the failing operation
 pub async fn get_apikey(
-    conn: &mut Connection,
+    conn: &mut PgConnection,
     id_: Option<i32>,
     key_prefix_: Option<String>,
 ) -> Result<Vec<ApiKey>, KohakuError> {
@@ -142,7 +141,7 @@ pub async fn get_apikey(
 /// Removes an entry representing an API key from the database
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 /// - `id_` : Serial primary key of the database. Either this or `key_prefix` must be set
 /// - `key_prefix_` : 10-char long [`String`] prefix of the actual full key. Either this or `id` must be set
 ///
@@ -151,7 +150,7 @@ pub async fn get_apikey(
 /// - [`Ok`] : The API key was deleted from the database
 /// - [`Err`] : A [enum@KohakuError] based on the failing operation
 pub async fn delete_apikey(
-    conn: &mut Connection,
+    conn: &mut PgConnection,
     id_: Option<i32>,
     key_prefix_: Option<String>,
 ) -> Result<(), KohakuError> {

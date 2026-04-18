@@ -4,10 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::{
-    db::{schema, Connection},
-    utils::error::KohakuError,
-};
+use crate::{db::schema, utils::error::KohakuError};
 // ========================================== MESSAGE ========================================== //
 
 /// Actual inner data send in events
@@ -72,7 +69,7 @@ pub struct DeleteSubscription {
 /// Creates an entry for a new subscription in the database
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 /// - `topic` : [`String`] representation of the topic name
 /// - `key_id` : [`i32`] of the subscribing clients API Key (e.g. Discord Client)
 /// - `target_data` : Optional additional information for the resulting event (e.g. Discord channel id and guild id)
@@ -82,7 +79,7 @@ pub struct DeleteSubscription {
 /// - [`Ok`] : A [`Subscription`] that mirrors the now stored subscription entry in the database
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn create_subscription<T: Serialize>(
-    conn: &mut Connection,
+    conn: &mut PgConnection,
     topic: String,
     key_id: i32,
     target_data_: Option<T>,
@@ -106,7 +103,7 @@ pub async fn create_subscription<T: Serialize>(
 /// Gets stored subscriptions based on either the topic name or the targets uuid.
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 /// - `topic_` : Topic name.
 /// - `key_id_` : Client identifier based on associated api key.
 /// - `target_data_` : Additional target data for unique identification of subscription.
@@ -118,7 +115,7 @@ pub async fn create_subscription<T: Serialize>(
 /// - [`Ok`] : Vector of [`Subscription`]s
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn get_subscription(
-    conn: &mut Connection,
+    conn: &mut PgConnection,
     topic_: Option<String>,
     key_id_: Option<i32>,
     target_data_: Option<Value>,
@@ -150,7 +147,7 @@ pub async fn get_subscription(
 /// Deletes a prior stored subscription from the database
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 /// - `topic_` : Topic name.
 /// - `key_id_` : Client identifier based on associated api key.
 /// - `target_data_` : Additional target data for unique identification of subscription.
@@ -162,7 +159,7 @@ pub async fn get_subscription(
 /// - [`Ok`] : Indicating the subscription is now deleted
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn delete_subscription(
-    conn: &mut Connection,
+    conn: &mut PgConnection,
     topic_: Option<String>,
     key_id_: Option<i32>,
     target_data_: Option<Value>,
@@ -224,7 +221,7 @@ struct NewTopic {
 /// Creates an entry for a new topic in the database
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 /// - `name` : Identifier for the topic. Used to subscribe to it and send notification to subscribed targets. Maximum length is 255 characters
 /// - `description` : [`String`] explaining what exactly the topic represents. Maximum length is 255 characters
 /// - `details` : Optional string explaining the result and how it can be formatted. Maximum length is 255 characters
@@ -234,7 +231,7 @@ struct NewTopic {
 /// - [`Ok`] : A [`Topic`] that mirrors the now stored topic entry in the database
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn create_topic(
-    conn: &mut Connection,
+    conn: &mut PgConnection,
     name: &str,
     description: &str,
     details: Option<String>,
@@ -272,13 +269,13 @@ pub async fn create_topic(
 /// Gets all stored topics
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 ///
 /// # Returns
 /// A [`Result`] which is either
 /// - [`Ok`] : A vector of [`Topic`]s
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
-pub async fn get_all_topics(conn: &mut Connection) -> Result<Vec<Topic>, KohakuError> {
+pub async fn get_all_topics(conn: &mut PgConnection) -> Result<Vec<Topic>, KohakuError> {
     use crate::db::schema::topics::dsl::*;
     topics.load(conn).map_err(KohakuError::DatabaseQueryError)
 }
@@ -286,7 +283,7 @@ pub async fn get_all_topics(conn: &mut Connection) -> Result<Vec<Topic>, KohakuE
 /// Gets a stored topic based on either the id or the name
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 /// - `id_` : Serial primary key of the database entry. Either this or `name_` must be set
 /// - `name_` : Topic name. Either this or `id_` must be set
 ///
@@ -295,7 +292,7 @@ pub async fn get_all_topics(conn: &mut Connection) -> Result<Vec<Topic>, KohakuE
 /// - [`Ok`] : Identified [`Topic`]
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn get_topic(
-    conn: &mut Connection,
+    conn: &mut PgConnection,
     id_: Option<i32>,
     name_: Option<String>,
 ) -> Result<Topic, KohakuError> {
@@ -323,7 +320,7 @@ pub async fn get_topic(
 /// Deletes a prior stored topic from the database
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
+/// - `conn` : Mutable [`PgConnection`] reference for database access
 /// - `id_` : Serial primary key of the database entry. Either this or `name_` must be set
 /// - `name_` : Topic name. Either this or `id_` must be set
 ///
@@ -332,7 +329,7 @@ pub async fn get_topic(
 /// - [`Ok`] : Indicating the topic is now deleted
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn delete_topic(
-    conn: &mut Connection,
+    conn: &mut PgConnection,
     id_: Option<i32>,
     name_: Option<String>,
 ) -> Result<(), KohakuError> {

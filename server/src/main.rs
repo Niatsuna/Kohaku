@@ -3,7 +3,7 @@ use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 
 use kohaku::{
-    db::migrate,
+    db::{get_connection, migrate},
     utils::{
         comm::{self, events},
         config::{get_config, init_config},
@@ -31,7 +31,8 @@ async fn main() -> std::io::Result<()> {
 
     // Setup database
     info!("Running database migration ...");
-    if let Err(e) = migrate() {
+    let mut conn = get_connection().expect("Failed to connect to database");
+    if let Err(e) = migrate(&mut conn) {
         error!("{}", e);
     }
 
