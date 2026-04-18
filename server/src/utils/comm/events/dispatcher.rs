@@ -16,7 +16,6 @@ use crate::{
 /// Notifies connected client based on topic subscriptions.
 ///
 /// # Parameters
-/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `source` : String identifier of origin of the event
 /// - `topic` : Topic name
 /// - `instruction` : Type of event for client handling
