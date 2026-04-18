@@ -1,14 +1,17 @@
 use actix_web::{web, HttpRequest, HttpResponse};
 
-use crate::utils::{
-    comm::{
-        auth::check_authorization_token,
-        events::models::{
-            create_subscription, delete_subscription, get_all_topics, CreateSubscription,
-            DeleteSubscription,
+use crate::{
+    db::get_connection,
+    utils::{
+        comm::{
+            auth::check_authorization_token,
+            events::models::{
+                create_subscription, delete_subscription, get_all_topics, CreateSubscription,
+                DeleteSubscription,
+            },
         },
+        error::KohakuError,
     },
-    error::KohakuError,
 };
 
 pub mod dispatcher;
@@ -27,7 +30,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
 /// - [`Ok`] : A [`HttpResponse`] with status `200` which holds a list of all available topics
 /// - [`Err`] : A [`KohakuError`] based on the failed operation
 async fn get_topics() -> Result<HttpResponse, KohakuError> {
-    let topics = get_all_topics().await?;
+    let mut conn = get_connection()?;
+    let topics = get_all_topics(&mut conn).await?;
     Ok(HttpResponse::Ok().json(topics))
 }
 
@@ -41,7 +45,8 @@ async fn subscribe(
     let topic = body.topic.clone();
     let key_id = claims.key_id;
     let target_data = body.target_data.clone();
-    let sub = create_subscription(topic, key_id, target_data).await?;
+    let mut conn = get_connection()?;
+    let sub = create_subscription(&mut conn, topic, key_id, target_data).await?;
 
     Ok(HttpResponse::Ok().json(sub))
 }
@@ -57,7 +62,8 @@ async fn unsubscribe(
     let key_id = claims.key_id;
     let target_data = body.target_data.clone();
 
-    delete_subscription(topic, Some(key_id), target_data).await?;
+    let mut conn = get_connection()?;
+    delete_subscription(&mut conn, topic, Some(key_id), target_data).await?;
 
     Ok(HttpResponse::Ok().finish())
 }

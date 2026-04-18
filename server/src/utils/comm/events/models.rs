@@ -5,7 +5,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
-    db::{get_connection, schema},
+    db::{schema, Connection},
     utils::error::KohakuError,
 };
 // ========================================== MESSAGE ========================================== //
@@ -72,6 +72,7 @@ pub struct DeleteSubscription {
 /// Creates an entry for a new subscription in the database
 ///
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `topic` : [`String`] representation of the topic name
 /// - `key_id` : [`i32`] of the subscribing clients API Key (e.g. Discord Client)
 /// - `target_data` : Optional additional information for the resulting event (e.g. Discord channel id and guild id)
@@ -81,15 +82,14 @@ pub struct DeleteSubscription {
 /// - [`Ok`] : A [`Subscription`] that mirrors the now stored subscription entry in the database
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn create_subscription<T: Serialize>(
+    conn: &mut Connection,
     topic: String,
     key_id: i32,
     target_data_: Option<T>,
 ) -> Result<Subscription, KohakuError> {
-    let topic_ = get_topic(None, Some(topic)).await?;
+    let topic_ = get_topic(conn, None, Some(topic)).await?;
     let data = serde_json::to_value(target_data_)
         .map_err(|_| KohakuError::ValidationError("Malformed target data!".to_string()))?;
-
-    let mut conn = get_connection()?;
 
     let new_subscription = NewSubscription {
         topic_id: topic_.id,
@@ -99,13 +99,14 @@ pub async fn create_subscription<T: Serialize>(
 
     diesel::insert_into(schema::subscriptions::table)
         .values(&new_subscription)
-        .get_result(&mut conn)
+        .get_result(conn)
         .map_err(KohakuError::DatabaseQueryError)
 }
 
 /// Gets stored subscriptions based on either the topic name or the targets uuid.
 ///
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `topic_` : Topic name.
 /// - `key_id_` : Client identifier based on associated api key.
 /// - `target_data_` : Additional target data for unique identification of subscription.
@@ -117,6 +118,7 @@ pub async fn create_subscription<T: Serialize>(
 /// - [`Ok`] : Vector of [`Subscription`]s
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn get_subscription(
+    conn: &mut Connection,
     topic_: Option<String>,
     key_id_: Option<i32>,
     target_data_: Option<Value>,
@@ -127,11 +129,10 @@ pub async fn get_subscription(
             "Illegal Argument: At least one of the parameters must be set!".to_string(),
         ));
     }
-    let mut conn = get_connection()?;
     let mut query = subscriptions.into_boxed();
 
     if topic_.is_some() {
-        let topic = get_topic(None, topic_).await?;
+        let topic = get_topic(conn, None, topic_).await?;
         query = FilterDsl::filter(query, topic_id.eq(topic.id));
     }
 
@@ -143,14 +144,13 @@ pub async fn get_subscription(
         query = FilterDsl::filter(query, target_data.eq(td));
     }
 
-    query
-        .load(&mut conn)
-        .map_err(KohakuError::DatabaseQueryError)
+    query.load(conn).map_err(KohakuError::DatabaseQueryError)
 }
 
 /// Deletes a prior stored subscription from the database
 ///
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `topic_` : Topic name.
 /// - `key_id_` : Client identifier based on associated api key.
 /// - `target_data_` : Additional target data for unique identification of subscription.
@@ -162,6 +162,7 @@ pub async fn get_subscription(
 /// - [`Ok`] : Indicating the subscription is now deleted
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn delete_subscription(
+    conn: &mut Connection,
     topic_: Option<String>,
     key_id_: Option<i32>,
     target_data_: Option<Value>,
@@ -172,11 +173,10 @@ pub async fn delete_subscription(
             "Illegal Argument: At least one of the parameters must be set!".to_string(),
         ));
     }
-    let mut conn = get_connection()?;
     let mut query = diesel::delete(subscriptions).into_boxed();
 
     if topic_.is_some() {
-        let topic = get_topic(None, topic_).await?;
+        let topic = get_topic(conn, None, topic_).await?;
         query = FilterDsl::filter(query, topic_id.eq(topic.id));
     }
 
@@ -189,7 +189,7 @@ pub async fn delete_subscription(
     }
 
     query
-        .execute(&mut conn)
+        .execute(conn)
         .map_err(KohakuError::DatabaseQueryError)?;
     Ok(())
 }
@@ -224,6 +224,7 @@ struct NewTopic {
 /// Creates an entry for a new topic in the database
 ///
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `name` : Identifier for the topic. Used to subscribe to it and send notification to subscribed targets. Maximum length is 255 characters
 /// - `description` : [`String`] explaining what exactly the topic represents. Maximum length is 255 characters
 /// - `details` : Optional string explaining the result and how it can be formatted. Maximum length is 255 characters
@@ -233,6 +234,7 @@ struct NewTopic {
 /// - [`Ok`] : A [`Topic`] that mirrors the now stored topic entry in the database
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
 pub async fn create_topic(
+    conn: &mut Connection,
     name: &str,
     description: &str,
     details: Option<String>,
@@ -255,8 +257,6 @@ pub async fn create_topic(
         ));
     }
 
-    let mut conn = get_connection()?;
-
     let new_topic = NewTopic {
         name: name.to_string(),
         description: description.to_string(),
@@ -265,27 +265,28 @@ pub async fn create_topic(
 
     diesel::insert_into(schema::topics::table)
         .values(&new_topic)
-        .get_result(&mut conn)
+        .get_result(conn)
         .map_err(KohakuError::DatabaseQueryError)
 }
 
 /// Gets all stored topics
 ///
+/// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
+///
 /// # Returns
 /// A [`Result`] which is either
 /// - [`Ok`] : A vector of [`Topic`]s
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
-pub async fn get_all_topics() -> Result<Vec<Topic>, KohakuError> {
+pub async fn get_all_topics(conn: &mut Connection) -> Result<Vec<Topic>, KohakuError> {
     use crate::db::schema::topics::dsl::*;
-    let mut conn = get_connection()?;
-    topics
-        .load(&mut conn)
-        .map_err(KohakuError::DatabaseQueryError)
+    topics.load(conn).map_err(KohakuError::DatabaseQueryError)
 }
 
 /// Gets a stored topic based on either the id or the name
 ///
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `id_` : Serial primary key of the database entry. Either this or `name_` must be set
 /// - `name_` : Topic name. Either this or `id_` must be set
 ///
@@ -293,14 +294,17 @@ pub async fn get_all_topics() -> Result<Vec<Topic>, KohakuError> {
 /// A [`Result`] which is either
 /// - [`Ok`] : Identified [`Topic`]
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
-pub async fn get_topic(id_: Option<i32>, name_: Option<String>) -> Result<Topic, KohakuError> {
+pub async fn get_topic(
+    conn: &mut Connection,
+    id_: Option<i32>,
+    name_: Option<String>,
+) -> Result<Topic, KohakuError> {
     use crate::db::schema::topics::dsl::*;
     if id_.is_none() && name_.is_none() {
         return Err(KohakuError::ValidationError(
             "Illegal Argument: At least one of the parameters must be set!".to_string(),
         ));
     }
-    let mut conn = get_connection()?;
     let mut query = topics.into_boxed();
 
     if let Some(i) = id_ {
@@ -312,13 +316,14 @@ pub async fn get_topic(id_: Option<i32>, name_: Option<String>) -> Result<Topic,
     }
 
     query
-        .get_result(&mut conn)
+        .get_result(conn)
         .map_err(KohakuError::DatabaseQueryError)
 }
 
 /// Deletes a prior stored topic from the database
 ///
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `id_` : Serial primary key of the database entry. Either this or `name_` must be set
 /// - `name_` : Topic name. Either this or `id_` must be set
 ///
@@ -326,14 +331,17 @@ pub async fn get_topic(id_: Option<i32>, name_: Option<String>) -> Result<Topic,
 /// A [`Result`] which is either
 /// - [`Ok`] : Indicating the topic is now deleted
 /// - [`Err`] : A [`KohakuError`] based on the failing operation
-pub async fn delete_topic(id_: Option<i32>, name_: Option<String>) -> Result<(), KohakuError> {
+pub async fn delete_topic(
+    conn: &mut Connection,
+    id_: Option<i32>,
+    name_: Option<String>,
+) -> Result<(), KohakuError> {
     use crate::db::schema::topics::dsl::*;
     if id_.is_none() && name_.is_none() {
         return Err(KohakuError::ValidationError(
             "Illegal Argument: At least one of the parameters must be set!".to_string(),
         ));
     }
-    let mut conn = get_connection()?;
     let mut query = diesel::delete(topics).into_boxed();
 
     if let Some(i) = id_ {
@@ -345,7 +353,7 @@ pub async fn delete_topic(id_: Option<i32>, name_: Option<String>) -> Result<(),
     }
 
     query
-        .execute(&mut conn)
+        .execute(conn)
         .map_err(KohakuError::DatabaseQueryError)?;
     Ok(())
 }

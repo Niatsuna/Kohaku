@@ -2,17 +2,21 @@ use itertools::Itertools;
 use serde_json::Value;
 use tracing::info;
 
-use crate::utils::{
-    comm::{
-        events::models::{get_subscription, get_topic, EventData, EventMessage},
-        websocket::manager::get_manager,
+use crate::{
+    db::get_connection,
+    utils::{
+        comm::{
+            events::models::{get_subscription, get_topic, EventData, EventMessage},
+            websocket::manager::get_manager,
+        },
+        error::KohakuError,
     },
-    error::KohakuError,
 };
 
 /// Notifies connected client based on topic subscriptions.
 ///
 /// # Parameters
+/// - `conn` : Mutable [`Connection`] reference for database access
 /// - `source` : String identifier of origin of the event
 /// - `topic` : Topic name
 /// - `instruction` : Type of event for client handling
@@ -29,8 +33,10 @@ pub async fn notify(
     data: Value,
 ) -> Result<(), KohakuError> {
     let name = Some(topic.to_string());
-    let _ = get_topic(None, name.clone()).await?;
-    let subs = get_subscription(name, None, None).await?;
+
+    let mut conn = get_connection()?;
+    let _ = get_topic(&mut conn, None, name.clone()).await?;
+    let subs = get_subscription(&mut conn, name, None, None).await?;
     let grouped = subs.into_iter().into_group_map_by(|s| s.key_id);
     let total = grouped.len();
     let mut connected = 0;
