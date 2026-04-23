@@ -8,7 +8,7 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use once_cell::sync::Lazy;
 use tracing::info;
 
-use crate::utils::config::{get_config, init_config};
+use crate::utils::config::get_config;
 use crate::utils::error::KohakuError;
 
 pub mod schema;
@@ -22,7 +22,6 @@ static DB_POLL: Lazy<Arc<Mutex<Pool>>> =
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/db/migrations");
 
 fn get_database_url() -> String {
-    let _ = init_config(); // Note: For integration test compatibility
     get_config().database_url.clone()
 }
 

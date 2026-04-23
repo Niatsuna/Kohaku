@@ -51,7 +51,7 @@ impl Config {
     }
 }
 
-pub fn init_config() -> Result<(), Box<dyn std::error::Error>> {
+fn init_config() -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(Config::new());
     CONFIG
         .set(config)
@@ -60,8 +60,8 @@ pub fn init_config() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn get_config() -> Arc<Config> {
-    CONFIG
-        .get()
-        .expect("Config not initialized - call init_config first")
-        .clone()
+    CONFIG.get().unwrap_or({
+        let _ = init_config();
+        CONFIG.get().expect("Failed to access initialized configuration!")
+    }).clone()
 }

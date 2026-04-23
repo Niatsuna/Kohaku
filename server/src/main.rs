@@ -6,7 +6,7 @@ use kohaku::{
     db::{get_connection, migrate},
     utils::{
         comm::{self, events},
-        config::{get_config, init_config},
+        config::get_config,
         initialize_services,
     },
 };
@@ -14,9 +14,6 @@ use kohaku::{
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
-    if init_config().is_err() {
-        error!("Couldn't initialize config!");
-    }
     let config = get_config();
 
     FmtSubscriber::builder()
