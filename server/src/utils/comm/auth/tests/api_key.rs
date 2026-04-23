@@ -150,14 +150,16 @@ fn test_hash_key_not_original_key() {
 
 #[test]
 fn test_hash_key_uniqueness() {
+    // Reduced amount of hashes to ensure faster test runs
+    // 100 Hashes resulted in 30 secs runtime due to argon2!
     let l = random_number(1, 100);
     let string = random_string(l);
-    let hashes: Vec<String> = (0..100)
+    let hashes: Vec<String> = (0..5)
         .map(|_| hash_key(&string).expect("Hashing string returns error"))
         .collect();
 
     let unique_count = hashes.iter().collect::<HashSet<&String>>().len();
-    assert_eq!(unique_count, 100, "Duplicated hashes found");
+    assert_eq!(unique_count, 5, "Duplicated hashes found");
 }
 
 // ==================================================================
