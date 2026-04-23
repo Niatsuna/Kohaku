@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin};
+use std::{future::Future, pin::Pin, sync::Mutex};
 
 use diesel::{Connection as _, PgConnection, RunQueryDsl};
 use kohaku::{
@@ -8,8 +8,11 @@ use kohaku::{
         models::{ApiKey, NewApiKey},
     },
 };
+use once_cell::sync::Lazy;
 
 use crate::helper::utils::vec_str_to_string;
+
+static MIGRATIONS_INITIALIZED: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
 
 pub async fn with_test_db<F>(f: F)
 where
@@ -21,7 +24,14 @@ where
         .expect("TEST_DATABASE_URL must be set in .env for integration and e2e tests!");
 
     let mut conn = PgConnection::establish(&test_url).expect("Failed to connect to database");
-    migrate(&mut conn).expect("Failed to migrate test database");
+
+    {
+        let mut initialized = MIGRATIONS_INITIALIZED.lock().unwrap();
+        if !*initialized {
+            migrate(&mut conn).expect("Failed to migrate test database");
+            *initialized = true;
+        }
+    }
     conn.begin_test_transaction()
         .expect("Failed to begin test transaction");
 
